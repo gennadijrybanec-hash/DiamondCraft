@@ -1,5 +1,6 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
-com.craftengine.diamondcraft
+
+package com.craftengine.diamondcraft
 
 import android.graphics.BitmapFactory
 import android.os.Bundle
