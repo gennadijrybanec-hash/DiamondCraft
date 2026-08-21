@@ -1,49 +1,26 @@
-# DiamondCraft 0.6 — Android prototype
+# DiamondCraft 1.0 Beta 1
 
-DiamondCraft превращает фотографию в схему для алмазной мозаики и помогает вести прогресс работы.
+Commercial-beta foundation for Android diamond-painting pattern creation.
 
-## Что работает
-- выбор фотографии из галереи Android;
-- преобразование изображения в сетку алмазной мозаики;
-- ширина схемы 20–100 элементов с автоматическим расчётом высоты;
-- цветовая палитра и количество элементов каждого цвета;
-- масштабирование и перемещение схемы;
-- отметка установленных страз и процент выполнения;
-- выбор квадратных (2,5 мм) или круглых (2,8 мм) страз;
-- расчёт физического размера готового изображения;
-- расчёт клеевой основы с полями по 3 см;
-- запас страз 5–20%;
-- закупочное количество по каждому цвету;
-- ориентировочный расчёт пакетиков по 200 шт.;
-- формирование нейтрального списка покупок, готового для будущих адаптеров магазинов/API.
+## Included in this build
 
-## Архитектура
-- `app` — Android UI на Jetpack Compose;
-- `core` — платформонезависимые модели, генератор схем, прогресс, расчёт материалов, экспортная модель и модель закупок;
-- `.github/workflows/main.yml` — сборка debug APK через GitHub Actions, Gradle 8.9 и JDK 17.
+- photo to drill-grid conversion with adaptive photo palette;
+- 30–200 drills wide and 24–120 adaptive colors;
+- zoom/pan and completed-drill progress tracking;
+- local save/restore of multiple projects;
+- square / round drill material estimates;
+- physical picture and adhesive-canvas size;
+- reserve percentage, per-color quantities and 200-piece bag estimates;
+- CSV materials export;
+- PDF materials export;
+- provider-neutral shopping list model ready for store/API adapters;
+- stable development APK signing for in-place updates;
+- version displayed from Android BuildConfig to avoid stale hard-coded labels.
 
-## Следующие коммерческие этапы
-Реальная палитра страз, сохранение/открытие проектов, PDF/PNG/CSV, улучшение качества конвертации изображения, Free/Pro, интеграции магазинов/партнёрских ссылок и подготовка релиза Google Play.
+## Test update path
 
-Версия 0.4 остаётся рабочим прототипом, а не финальным коммерческим релизом.
+This build uses the same `app/diamondcraft-dev.keystore` introduced in v0.6 and raises `versionCode` to 100. Install the new APK directly over v0.6. Android should offer an update without uninstalling the application. Project data stored by v0.6 will remain if the app is updated in place.
 
+## Google Play
 
-## v0.5 Quality Engine
-- Adaptive 24–96 color palette generated from the source image
-- Perceptual weighted color matching
-- Linear-light area downsampling + center detail preservation
-- Mild contrast/saturation enhancement
-- Pattern width up to 160 drills
-
-
-## Dev APK signing
-Debug APKs use the bundled `diamondcraft-dev.keystore` so GitHub Actions builds can update one another on the test phone. This key is for development only and must never be used for Google Play production signing.
-
-
-## v0.6 Color & Detail Engine
-- Lab-based adaptive palette with farthest-point seeding
-- spatially uniform image sampling instead of row-major sampling
-- near-duplicate palette colors are removed
-- stronger but controlled contrast/saturation correction
-- edge/detail sample preservation inside each drill cell
-- stable dev APK signing retained for install-over-update testing
+The bundled development keystore is only for internal APK testing. Production Google Play signing / Play App Signing must use a separate release key and release build configuration.

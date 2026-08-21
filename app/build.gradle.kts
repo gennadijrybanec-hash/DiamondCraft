@@ -3,16 +3,19 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
 android {
     namespace = "com.craftengine.diamondcraft"
     compileSdk = 35
+
     defaultConfig {
         applicationId = "com.craftengine.diamondcraft"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "0.6"
+        versionCode = 100
+        versionName = "1.0-beta1"
     }
+
     signingConfigs {
         create("dev") {
             storeFile = file("diamondcraft-dev.keystore")
@@ -21,15 +24,25 @@ android {
             keyPassword = "diamondcraftdev"
         }
     }
+
     buildTypes {
         getByName("debug") {
             signingConfig = signingConfigs.getByName("dev")
         }
     }
-    buildFeatures { compose = true }
-    compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
     kotlinOptions { jvmTarget = "17" }
 }
+
 dependencies {
     implementation(project(":core"))
     implementation("androidx.activity:activity-compose:1.10.1")

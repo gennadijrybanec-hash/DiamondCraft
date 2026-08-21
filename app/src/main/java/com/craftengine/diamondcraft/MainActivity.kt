@@ -1,6 +1,9 @@
 package com.craftengine.diamondcraft
 
+import android.content.Context
 import android.graphics.BitmapFactory
+import android.graphics.Paint
+import android.graphics.pdf.PdfDocument
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -22,6 +25,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.craftengine.core.*
+import java.io.File
 import java.util.Locale
 import java.util.UUID
 import kotlin.math.min
@@ -33,72 +37,163 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private data class SavedProjectInfo(val file: File, val project: CraftProject)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DiamondApp() {
     val context = LocalContext.current
     var project by remember { mutableStateOf<CraftProject?>(null) }
-    var width by remember { mutableFloatStateOf(80f) }
-    var colorCount by remember { mutableFloatStateOf(60f) }
+    var width by remember { mutableFloatStateOf(100f) }
+    var colorCount by remember { mutableFloatStateOf(72f) }
     var reserve by remember { mutableFloatStateOf(10f) }
     var drillShape by remember { mutableStateOf(DrillShape.SQUARE) }
     var status by remember { mutableStateOf("Выберите фотографию") }
+    var savedRefresh by remember { mutableIntStateOf(0) }
+
+    val savedProjects = remember(savedRefresh) { listSavedProjects(context) }
+
+    val csvLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/csv")
+    ) { uri ->
+        val p = project ?: return@rememberLauncherForActivityResult
+        if (uri != null) runCatching {
+            val estimate = materialEstimate(p, drillShape, reserve.toInt())
+            context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use {
+                it.write(materialsCsv(p, estimate))
+            }
+        }.onSuccess { status = "CSV сохранён" }
+            .onFailure { status = "Не удалось сохранить CSV" }
+    }
+
+    val pdfLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/pdf")
+    ) { uri ->
+        val p = project ?: return@rememberLauncherForActivityResult
+        if (uri != null) runCatching {
+            val estimate = materialEstimate(p, drillShape, reserve.toInt())
+            context.contentResolver.openOutputStream(uri)?.use { output ->
+                writeMaterialsPdf(output, p, estimate)
+            }
+        }.onSuccess { status = "PDF сохранён" }
+            .onFailure { status = "Не удалось сохранить PDF" }
+    }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) runCatching {
             context.contentResolver.openInputStream(uri).use { input -> BitmapFactory.decodeStream(input) }!!
         }.onSuccess { bmp ->
-            val maxSide = width.toInt().coerceIn(20, 160)
-            val h = (maxSide * bmp.height.toFloat() / bmp.width).toInt().coerceIn(20, 220)
-            val px = IntArray(bmp.width * bmp.height)
-            bmp.getPixels(px, 0, bmp.width, 0, 0, bmp.width, bmp.height)
-            val source = CraftImage(bmp.width, bmp.height, px)
-            status = "Анализ цветов и деталей…"
-            val adaptivePalette = PaletteEngine.adaptivePalette(source, colorCount.toInt())
+            val targetW = width.toInt().coerceIn(30, 200)
+            val targetH = (targetW * bmp.height.toFloat() / bmp.width).toInt().coerceIn(30, 280)
+            val pixels = IntArray(bmp.width * bmp.height)
+            bmp.getPixels(pixels, 0, bmp.width, 0, 0, bmp.width, bmp.height)
+            val source = CraftImage(bmp.width, bmp.height, pixels)
+
+            status = "Анализируем фотографию…"
+            val palette = PaletteEngine.adaptivePalette(source, colorCount.toInt())
             val grid = ImageEngine.toGrid(
                 source,
-                ImageConversionOptions(maxSide, h, adaptivePalette)
+                ImageConversionOptions(
+                    targetWidth = targetW,
+                    targetHeight = targetH,
+                    palette = palette,
+                    detailBoost = 0.48,
+                    saturationBoost = 1.18,
+                    contrastBoost = 1.14
+                )
             )
             project = CraftProject(
-                UUID.randomUUID().toString(),
-                "Моя алмазная картина",
-                CraftMode.DIAMOND_PAINTING,
-                grid,
-                System.currentTimeMillis()
+                id = UUID.randomUUID().toString(),
+                name = "Моя алмазная картина",
+                mode = CraftMode.DIAMOND_PAINTING,
+                grid = grid,
+                updatedAt = System.currentTimeMillis()
             )
-            status = "Схема создана: ${grid.width} × ${grid.height}"
+            status = "Схема создана: ${grid.width} × ${grid.height} • ${palette.size} цветов"
         }.onFailure { status = "Не удалось открыть изображение" }
     }
 
-    Scaffold(topBar = { TopAppBar(title = { Text("💎 DiamondCraft 0.6") }) }) { pad ->
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("💎 DiamondCraft ${BuildConfig.VERSION_NAME}") }
+            )
+        }
+    ) { pad ->
         Column(
-            Modifier.padding(pad).padding(12.dp).fillMaxSize().verticalScroll(rememberScrollState()),
+            Modifier
+                .padding(pad)
+                .padding(12.dp)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text("Фото → схема алмазной мозаики", style = MaterialTheme.typography.titleMedium)
+
             Text("Ширина схемы: ${width.toInt()} страз")
-            Slider(width, { width = it }, valueRange = 20f..160f, steps = 13)
+            Slider(width, { width = it }, valueRange = 30f..200f, steps = 16)
+
             Text("Детализация цвета: ${colorCount.toInt()} цветов")
-            Slider(colorCount, { colorCount = it }, valueRange = 24f..96f, steps = 5)
-            Text("Для портретов и животных рекомендуем 80–120 страз по ширине и 48–72 цвета.")
+            Slider(colorCount, { colorCount = it }, valueRange = 24f..120f, steps = 7)
+
+            Text("Для портретов: 100–140 страз и 60–84 цвета. Для пейзажей: 120–180 и 72–108 цветов.")
+
             Button(onClick = { picker.launch("image/*") }, modifier = Modifier.fillMaxWidth()) {
                 Text("Выбрать фотографию")
             }
             Text(status)
 
+            if (savedProjects.isNotEmpty()) {
+                HorizontalDivider()
+                Text("Сохранённые проекты", style = MaterialTheme.typography.titleMedium)
+                savedProjects.take(5).forEach { saved ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = {
+                                project = saved.project
+                                status = "Проект восстановлен: ${saved.project.name}"
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("${saved.project.name} • ${saved.project.grid.width}×${saved.project.grid.height}")
+                        }
+                        TextButton(onClick = {
+                            saved.file.delete()
+                            savedRefresh++
+                        }) { Text("Удалить") }
+                    }
+                }
+            }
+
             project?.let { p ->
                 val stats = DiamondEngine.stats(p.grid)
-                val estimate = DiamondMaterialEngine.estimate(
-                    p.grid,
-                    DiamondMaterialOptions(
-                        drillShape = drillShape,
-                        reservePercent = reserve.toInt(),
-                        drillsPerBag = 200,
-                        canvasMarginCm = 3.0
-                    )
-                )
+                val estimate = materialEstimate(p, drillShape, reserve.toInt())
 
+                HorizontalDivider()
+                Text("Проект", style = MaterialTheme.typography.titleMedium)
+                Text("${p.grid.width} × ${p.grid.height} • ${p.grid.palette.size} цветов")
                 Text("Установлено: ${stats.completedDrills} / ${stats.totalDrills} • ${p.grid.progressPercent()}%")
+
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = {
+                            saveProject(context, p.copy(updatedAt = System.currentTimeMillis()))
+                            savedRefresh++
+                            status = "Проект сохранён"
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Сохранить") }
+                    OutlinedButton(
+                        onClick = {
+                            project = p.copy(
+                                grid = ProgressEngine.clear(p.grid),
+                                updatedAt = System.currentTimeMillis()
+                            )
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Сбросить прогресс") }
+                }
+
                 DiamondGrid(p.grid) { x, y ->
                     project = p.copy(
                         grid = ProgressEngine.toggle(p.grid, x, y),
@@ -108,6 +203,7 @@ private fun DiamondApp() {
 
                 HorizontalDivider()
                 Text("Расходники", style = MaterialTheme.typography.titleMedium)
+
                 SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                     DrillShape.entries.forEachIndexed { index, shape ->
                         SegmentedButton(
@@ -121,16 +217,10 @@ private fun DiamondApp() {
                 Text("Запас страз: ${reserve.toInt()}%")
                 Slider(reserve, { reserve = it }, valueRange = 5f..20f, steps = 2)
 
-                Text(
-                    "Размер изображения: ${cm(estimate.pictureWidthCm)} × ${cm(estimate.pictureHeightCm)} см"
-                )
-                Text(
-                    "Клеевая основа с полями: ${cm(estimate.canvasWidthCm)} × ${cm(estimate.canvasHeightCm)} см"
-                )
-                Text(
-                    "Стразы: ${estimate.totalExactDrills} шт. + ${estimate.reservePercent}% = ${estimate.totalRequiredDrills} шт."
-                )
-                Text("Ориентировочно пакетиков по 200 шт.: ${estimate.totalBags}")
+                Text("Размер картины: ${cm(estimate.pictureWidthCm)} × ${cm(estimate.pictureHeightCm)} см")
+                Text("Клеевая основа с полями: ${cm(estimate.canvasWidthCm)} × ${cm(estimate.canvasHeightCm)} см")
+                Text("Стразы: ${estimate.totalExactDrills} шт. + ${estimate.reservePercent}% = ${estimate.totalRequiredDrills} шт.")
+                Text("Пакетиков по 200 шт.: примерно ${estimate.totalBags}")
 
                 Text("Палитра и закупка", style = MaterialTheme.typography.titleMedium)
                 estimate.colors.forEachIndexed { i, item ->
@@ -138,26 +228,116 @@ private fun DiamondApp() {
                         Box(Modifier.size(22.dp).background(Color(item.color.argb)))
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            "${i + 1}. ${item.color.name} (${item.color.id}) — " +
-                                "${item.exactCount} / купить ${item.requiredCount} шт. (${item.bags} пак.)"
+                            "${i + 1}. ${item.color.id} — ${item.exactCount} шт.; купить ${item.requiredCount} (${item.bags} пак.)"
                         )
                     }
                 }
 
-                OutlinedButton(
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = { csvLauncher.launch("DiamondCraft_${p.grid.width}x${p.grid.height}_materials.csv") },
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Экспорт CSV") }
+                    OutlinedButton(
+                        onClick = { pdfLauncher.launch("DiamondCraft_${p.grid.width}x${p.grid.height}_materials.pdf") },
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Экспорт PDF") }
+                }
+
+                Button(
                     onClick = {
-                        // v0.4 intentionally keeps shopping provider-neutral.
-                        // DiamondShoppingModel.from(estimate) is ready for store/API adapters.
-                        status = "Список покупок готов: ${DiamondShoppingModel.from(estimate).size} позиций"
+                        val items = DiamondShoppingModel.from(estimate)
+                        status = "Список покупок готов: ${items.size} позиций. Подключение магазинов — следующий этап."
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) { Text("Подготовить список покупок") }
+
+                Text(
+                    "Free: генерация и сохранение проектов. Pro: расширенный экспорт, большие схемы и магазины будут подключены после настройки Google Play Billing.",
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
         }
     }
 }
 
-private fun cm(value: Double): String = String.format(Locale.getDefault(), "%.1f", value)
+private fun materialEstimate(project: CraftProject, shape: DrillShape, reserve: Int) =
+    DiamondMaterialEngine.estimate(
+        project.grid,
+        DiamondMaterialOptions(
+            drillShape = shape,
+            reservePercent = reserve,
+            drillsPerBag = 200,
+            canvasMarginCm = 3.0
+        )
+    )
+
+private fun saveProject(context: Context, project: CraftProject) {
+    val dir = File(context.filesDir, "projects").apply { mkdirs() }
+    File(dir, "${project.id}.dcproj").writeText(ProjectCodec.encode(project))
+}
+
+private fun listSavedProjects(context: Context): List<SavedProjectInfo> {
+    val dir = File(context.filesDir, "projects")
+    if (!dir.exists()) return emptyList()
+    return dir.listFiles { f -> f.extension == "dcproj" }
+        ?.mapNotNull { file -> runCatching { SavedProjectInfo(file, ProjectCodec.decode(file.readText())) }.getOrNull() }
+        ?.sortedByDescending { it.project.updatedAt }
+        .orEmpty()
+}
+
+private fun materialsCsv(project: CraftProject, estimate: DiamondMaterialEstimate): String = buildString {
+    appendLine("DiamondCraft;${BuildConfig.VERSION_NAME}")
+    appendLine("Project;${project.name}")
+    appendLine("Grid;${project.grid.width}x${project.grid.height}")
+    appendLine("Picture cm;${cm(estimate.pictureWidthCm)}x${cm(estimate.pictureHeightCm)}")
+    appendLine("Canvas cm;${cm(estimate.canvasWidthCm)}x${cm(estimate.canvasHeightCm)}")
+    appendLine("Reserve;${estimate.reservePercent}%")
+    appendLine("Color ID;Exact;Required;Bags")
+    estimate.colors.forEach { appendLine("${it.color.id};${it.exactCount};${it.requiredCount};${it.bags}") }
+}
+
+private fun writeMaterialsPdf(output: java.io.OutputStream, project: CraftProject, estimate: DiamondMaterialEstimate) {
+    val pdf = PdfDocument()
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 13f }
+    val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 20f; isFakeBoldText = true }
+    var pageNo = 1
+    var page = pdf.startPage(PdfDocument.PageInfo.Builder(595, 842, pageNo).create())
+    var canvas = page.canvas
+    var y = 45f
+
+    fun newPage() {
+        pdf.finishPage(page)
+        pageNo++
+        page = pdf.startPage(PdfDocument.PageInfo.Builder(595, 842, pageNo).create())
+        canvas = page.canvas
+        y = 45f
+    }
+    fun line(text: String, bold: Boolean = false) {
+        if (y > 805f) newPage()
+        canvas.drawText(text, 40f, y, if (bold) titlePaint else paint)
+        y += if (bold) 28f else 20f
+    }
+
+    line("DiamondCraft ${BuildConfig.VERSION_NAME}", true)
+    line("Project: ${project.name}")
+    line("Grid: ${project.grid.width} x ${project.grid.height}")
+    line("Picture: ${cm(estimate.pictureWidthCm)} x ${cm(estimate.pictureHeightCm)} cm")
+    line("Canvas: ${cm(estimate.canvasWidthCm)} x ${cm(estimate.canvasHeightCm)} cm")
+    line("Drills: ${estimate.totalRequiredDrills} incl. ${estimate.reservePercent}% reserve")
+    line("Bags ~200 pcs: ${estimate.totalBags}")
+    y += 8f
+    line("Materials", true)
+    estimate.colors.forEachIndexed { index, item ->
+        line("${index + 1}. ${item.color.id}: ${item.exactCount} -> ${item.requiredCount} pcs (${item.bags} bags)")
+    }
+
+    pdf.finishPage(page)
+    pdf.writeTo(output)
+    pdf.close()
+}
+
+private fun cm(value: Double): String = String.format(Locale.US, "%.1f", value)
 
 @Composable
 private fun DiamondGrid(grid: CraftGrid, onCell: (Int, Int) -> Unit) {
@@ -165,23 +345,26 @@ private fun DiamondGrid(grid: CraftGrid, onCell: (Int, Int) -> Unit) {
     var pan by remember { mutableStateOf(Offset.Zero) }
 
     Canvas(
-        Modifier.fillMaxWidth().height(430.dp).background(Color(0xFFF5F5F5))
+        Modifier
+            .fillMaxWidth()
+            .height(460.dp)
+            .background(Color(0xFFF5F5F5))
             .pointerInput(grid, scale, pan) {
                 detectTransformGestures { _, panChange, zoom, _ ->
-                    scale = (scale * zoom).coerceIn(0.8f, 6f)
+                    scale = (scale * zoom).coerceIn(0.7f, 8f)
                     pan += panChange
                 }
             }
             .pointerInput(grid, scale, pan) {
                 awaitPointerEventScope {
                     while (true) {
-                        val e = awaitPointerEvent()
-                        val ch = e.changes.firstOrNull() ?: continue
-                        if (!ch.pressed && ch.previousPressed) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull() ?: continue
+                        if (!change.pressed && change.previousPressed) {
                             val base = min(size.width / grid.width.toFloat(), size.height / grid.height.toFloat())
                             val cell = base * scale
-                            val x = ((ch.position.x - pan.x) / cell).toInt()
-                            val y = ((ch.position.y - pan.y) / cell).toInt()
+                            val x = ((change.position.x - pan.x) / cell).toInt()
+                            val y = ((change.position.y - pan.y) / cell).toInt()
                             if (x in 0 until grid.width && y in 0 until grid.height) onCell(x, y)
                         }
                     }
@@ -195,11 +378,12 @@ private fun DiamondGrid(grid: CraftGrid, onCell: (Int, Int) -> Unit) {
             val y = idx / grid.width
             val left = pan.x + x * cell
             val top = pan.y + y * cell
-            drawCircle(Color(grid.palette[c.colorIndex].argb), cell * 0.38f, Offset(left + cell / 2, top + cell / 2))
+            val center = Offset(left + cell / 2, top + cell / 2)
+            drawCircle(Color(grid.palette[c.colorIndex].argb), cell * 0.38f, center)
             drawCircle(
                 if (c.completed) Color.Black else Color.Gray,
                 cell * 0.38f,
-                Offset(left + cell / 2, top + cell / 2),
+                center,
                 style = Stroke(if (c.completed) cell * 0.16f else 1f)
             )
         }
