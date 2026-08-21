@@ -6,14 +6,14 @@ plugins {
 
 android {
     namespace = "com.craftengine.diamondcraft"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.craftengine.diamondcraft"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 122
-        versionName = "1.0-rc4"
+        targetSdk = 36
+        versionCode = 150
+        versionName = "1.0-rc10"
     }
 
     signingConfigs {
@@ -23,11 +23,27 @@ android {
             keyAlias = "diamondcraft-dev"
             keyPassword = "diamondcraftdev"
         }
+
+        create("releaseUpload") {
+            val keystorePath = System.getenv("DIAMONDCRAFT_KEYSTORE_PATH")
+            if (!keystorePath.isNullOrBlank()) {
+                storeFile = file(keystorePath)
+                storePassword = System.getenv("DIAMONDCRAFT_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("DIAMONDCRAFT_KEY_ALIAS")
+                keyPassword = System.getenv("DIAMONDCRAFT_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         getByName("debug") {
             signingConfig = signingConfigs.getByName("dev")
+        }
+        getByName("release") {
+            isMinifyEnabled = false
+            if (!System.getenv("DIAMONDCRAFT_KEYSTORE_PATH").isNullOrBlank()) {
+                signingConfig = signingConfigs.getByName("releaseUpload")
+            }
         }
     }
 
@@ -50,5 +66,6 @@ dependencies {
     implementation("androidx.compose.ui:ui:1.7.8")
     implementation("androidx.compose.ui:ui-tooling-preview:1.7.8")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
+    implementation("com.android.billingclient:billing-ktx:9.1.0")
     debugImplementation("androidx.compose.ui:ui-tooling:1.7.8")
 }

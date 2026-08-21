@@ -23,6 +23,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.foundation.Image
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -36,11 +39,38 @@ import kotlin.math.min
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { MaterialTheme { DiamondApp() } }
+        setContent { DiamondCraftTheme { DiamondApp() } }
     }
 }
 
+
+
+@Composable
+private fun DiamondCraftTheme(content: @Composable () -> Unit) {
+    val scheme = lightColorScheme(
+        primary = Color(0xFF6C4BD3),
+        onPrimary = Color.White,
+        primaryContainer = Color(0xFFE9E1FF),
+        onPrimaryContainer = Color(0xFF251052),
+        secondary = Color(0xFF665A7A),
+        secondaryContainer = Color(0xFFEDE1F7),
+        tertiary = Color(0xFF006A6A),
+        background = Color(0xFFFFFBFF),
+        surface = Color(0xFFFFFBFF),
+        surfaceVariant = Color(0xFFE8E0EB)
+    )
+    MaterialTheme(colorScheme = scheme, content = content)
+}
+
 private data class SavedProjectInfo(val file: File, val project: CraftProject)
+
+private object CommercialLimits {
+    const val FREE_MAX_WIDTH = 100
+    const val FREE_MAX_COLORS = 60
+    const val PRO_MAX_WIDTH = 200
+    const val PRO_MAX_COLORS = 120
+}
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,8 +89,16 @@ private fun DiamondApp() {
     var sourceImage by remember { mutableStateOf<CraftImage?>(null) }
     var showNewProjectConfirm by remember { mutableStateOf(false) }
     var deleteCandidate by remember { mutableStateOf<SavedProjectInfo?>(null) }
+    var showOriginal by remember { mutableStateOf(false) }
+    var showProDialog by remember { mutableStateOf(false) }
+    var showAboutDialog by remember { mutableStateOf(false) }
+    // RC test build: true keeps all features available while Google Play Billing is not connected yet.
+    // Release build will replace this with the verified Google Play purchase entitlement.
+    val isPro = true
 
     val savedProjects = remember(savedRefresh) { listSavedProjects(context) }
+    val maxWidth = if (isPro) CommercialLimits.PRO_MAX_WIDTH else CommercialLimits.FREE_MAX_WIDTH
+    val maxColors = if (isPro) CommercialLimits.PRO_MAX_COLORS else CommercialLimits.FREE_MAX_COLORS
 
     val csvLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("text/csv")
@@ -125,6 +163,7 @@ private fun DiamondApp() {
             val restored = imported.copy(updatedAt = System.currentTimeMillis())
             project = restored
             sourceImage = null
+            showOriginal = false
             width = restored.grid.width.toFloat().coerceIn(30f, 200f)
             colorCount = restored.grid.palette.size.toFloat().coerceIn(24f, 120f)
             saveProject(context, restored)
@@ -137,19 +176,20 @@ private fun DiamondApp() {
         if (uri != null) runCatching {
             context.contentResolver.openInputStream(uri).use { input -> BitmapFactory.decodeStream(input) }!!
         }.onSuccess { bmp ->
-            val targetW = width.toInt().coerceIn(30, 200)
+            val targetW = width.toInt().coerceIn(30, maxWidth)
             val targetH = (targetW * bmp.height.toFloat() / bmp.width).toInt().coerceIn(30, 280)
             val pixels = IntArray(bmp.width * bmp.height)
             bmp.getPixels(pixels, 0, bmp.width, 0, 0, bmp.width, bmp.height)
             val source = CraftImage(bmp.width, bmp.height, pixels)
             sourceImage = source
+            showOriginal = false
 
             status = "Анализируем фотографию…"
             val grid = ImageEngine.toAdaptiveGrid(
                 image = source,
                 targetWidth = targetW,
                 targetHeight = targetH,
-                requestedColors = colorCount.toInt(),
+                requestedColors = colorCount.toInt().coerceAtMost(maxColors),
                 profile = imageProfile,
                 colorStyle = colorStyle
             )
@@ -196,6 +236,7 @@ private fun DiamondApp() {
                 TextButton(onClick = {
                     project = null
                     sourceImage = null
+                    showOriginal = false
                     shoppingListText = null
                     status = "Выберите фотографию"
                     showNewProjectConfirm = false
@@ -229,10 +270,80 @@ private fun DiamondApp() {
         )
     }
 
+    if (showProDialog) {
+        AlertDialog(
+            onDismissRequest = { showProDialog = false },
+            title = { Text("DiamondCraft Pro") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Бесплатная версия:")
+                    Text("• схемы до ${CommercialLimits.FREE_MAX_WIDTH} страз по ширине")
+                    Text("• до ${CommercialLimits.FREE_MAX_COLORS} цветов")
+                    Text("• сохранение проектов и отслеживание прогресса")
+                    HorizontalDivider()
+                    Text("DiamondCraft Pro:")
+                    Text("• схемы до ${CommercialLimits.PRO_MAX_WIDTH} страз")
+                    Text("• до ${CommercialLimits.PRO_MAX_COLORS} цветов")
+                    Text("• PNG, PDF и CSV экспорт")
+                    Text("• импорт/экспорт .diamondcraft")
+                    Text("• расширенные профили обработки")
+                    Text("• будущий подбор расходников по каталогам")
+                    HorizontalDivider()
+                    Text(
+                        "RC9 работает в тестовом Pro-режиме. Перед релизом этот флаг будет заменён реальным статусом покупки из Google Play Billing.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showProDialog = false }) { Text("Понятно") }
+            }
+        )
+    }
+
+    if (showAboutDialog) {
+        AlertDialog(
+            onDismissRequest = { showAboutDialog = false },
+            title = { Text("О DiamondCraft") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("DiamondCraft ${BuildConfig.VERSION_NAME}")
+                    Text("Создание схем алмазной мозаики из фотографий.")
+                    HorizontalDivider()
+                    Text("Возможности:")
+                    Text("• фото → схема")
+                    Text("• профили обработки и цветопередачи")
+                    Text("• масштабирование и отметка прогресса")
+                    Text("• сохранение и перенос проектов")
+                    Text("• PNG, PDF и CSV")
+                    Text("• расчёт страз и основы")
+                    Text("• список покупок")
+                    HorizontalDivider()
+                    Text(
+                        "Фотографии и проекты обрабатываются локально на устройстве. " +
+                            "Платные функции будут подключены через Google Play Billing.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showAboutDialog = false }) { Text("Закрыть") }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("💎 DiamondCraft ${BuildConfig.VERSION_NAME}") }
+                title = { Text("💎 DiamondCraft") },
+                actions = {
+                    TextButton(onClick = { showProDialog = true }) {
+                        Text(if (isPro) "PRO ✓" else "PRO")
+                    }
+                    TextButton(onClick = { showAboutDialog = true }) {
+                        Text("О приложении")
+                    }
+                }
             )
         }
     ) { pad ->
@@ -245,12 +356,16 @@ private fun DiamondApp() {
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text("Фото → схема алмазной мозаики", style = MaterialTheme.typography.titleMedium)
+            Text(
+                if (isPro) "DiamondCraft Pro • тестовый RC-доступ" else "Бесплатный режим • до ${CommercialLimits.FREE_MAX_WIDTH} страз / ${CommercialLimits.FREE_MAX_COLORS} цветов",
+                style = MaterialTheme.typography.bodySmall
+            )
 
             Text("Ширина схемы: ${width.toInt()} страз")
-            Slider(width, { width = it }, valueRange = 30f..200f, steps = 16)
+            Slider(width, { width = it }, valueRange = 30f..maxWidth.toFloat(), steps = 16)
 
             Text("Детализация цвета: ${colorCount.toInt()} цветов")
-            Slider(colorCount, { colorCount = it }, valueRange = 24f..120f, steps = 7)
+            Slider(colorCount, { colorCount = it }, valueRange = 24f..maxColors.toFloat(), steps = 7)
 
             Text("Для портретов: 100–140 страз и 60–84 цвета. Для пейзажей: 120–180 и 72–108 цветов.")
 
@@ -284,14 +399,17 @@ private fun DiamondApp() {
                 Text("Выбрать фотографию")
             }
             OutlinedButton(
-                onClick = { projectImportLauncher.launch(arrayOf("*/*")) },
+                onClick = {
+                    if (isPro) projectImportLauncher.launch(arrayOf("*/*"))
+                    else showProDialog = true
+                },
                 modifier = Modifier.fillMaxWidth()
             ) { Text("Импорт проекта (.diamondcraft)") }
             if (sourceImage != null) {
                 OutlinedButton(
                     onClick = {
                         val source = sourceImage ?: return@OutlinedButton
-                        val targetW = width.toInt().coerceIn(30, 200)
+                        val targetW = width.toInt().coerceIn(30, maxWidth)
                         val targetH = (targetW * source.height.toFloat() / source.width).toInt().coerceIn(30, 280)
                         status = "Пересчитываем схему…"
                         runCatching {
@@ -299,7 +417,7 @@ private fun DiamondApp() {
                                 image = source,
                                 targetWidth = targetW,
                                 targetHeight = targetH,
-                                requestedColors = colorCount.toInt(),
+                                requestedColors = colorCount.toInt().coerceAtMost(maxColors),
                                 profile = imageProfile,
                                 colorStyle = colorStyle
                             )
@@ -373,17 +491,37 @@ private fun DiamondApp() {
                     ) { Text("Новый проект") }
                     OutlinedButton(
                         onClick = {
-                            projectExportLauncher.launch("DiamondCraft_${p.grid.width}x${p.grid.height}.diamondcraft")
+                            if (isPro) projectExportLauncher.launch("DiamondCraft_${p.grid.width}x${p.grid.height}.diamondcraft")
+                            else showProDialog = true
                         },
                         modifier = Modifier.weight(1f)
                     ) { Text("Экспорт проекта") }
                 }
 
-                DiamondGrid(p.grid) { x, y ->
-                    project = p.copy(
-                        grid = ProgressEngine.toggle(p.grid, x, y),
-                        updatedAt = System.currentTimeMillis()
-                    )
+                if (sourceImage != null) {
+                    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                        SegmentedButton(
+                            selected = !showOriginal,
+                            onClick = { showOriginal = false },
+                            shape = SegmentedButtonDefaults.itemShape(0, 2)
+                        ) { Text("Схема") }
+                        SegmentedButton(
+                            selected = showOriginal,
+                            onClick = { showOriginal = true },
+                            shape = SegmentedButtonDefaults.itemShape(1, 2)
+                        ) { Text("Оригинал") }
+                    }
+                }
+
+                if (showOriginal && sourceImage != null) {
+                    OriginalImagePreview(sourceImage!!)
+                } else {
+                    DiamondGrid(p.grid) { x, y ->
+                        project = p.copy(
+                            grid = ProgressEngine.toggle(p.grid, x, y),
+                            updatedAt = System.currentTimeMillis()
+                        )
+                    }
                 }
 
                 HorizontalDivider()
@@ -421,18 +559,27 @@ private fun DiamondApp() {
 
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(
-                        onClick = { pngLauncher.launch("DiamondCraft_${p.grid.width}x${p.grid.height}_pattern.png") },
+                        onClick = {
+                            if (isPro) pngLauncher.launch("DiamondCraft_${p.grid.width}x${p.grid.height}_pattern.png")
+                            else showProDialog = true
+                        },
                         modifier = Modifier.weight(1f)
-                    ) { Text("Схема PNG") }
+                    ) { Text(if (isPro) "Схема PNG" else "PNG • PRO") }
                     OutlinedButton(
-                        onClick = { pdfLauncher.launch("DiamondCraft_${p.grid.width}x${p.grid.height}_materials.pdf") },
+                        onClick = {
+                            if (isPro) pdfLauncher.launch("DiamondCraft_${p.grid.width}x${p.grid.height}_materials.pdf")
+                            else showProDialog = true
+                        },
                         modifier = Modifier.weight(1f)
-                    ) { Text("Расходники PDF") }
+                    ) { Text(if (isPro) "Расходники PDF" else "PDF • PRO") }
                 }
                 OutlinedButton(
-                    onClick = { csvLauncher.launch("DiamondCraft_${p.grid.width}x${p.grid.height}_materials.csv") },
+                    onClick = {
+                        if (isPro) csvLauncher.launch("DiamondCraft_${p.grid.width}x${p.grid.height}_materials.csv")
+                        else showProDialog = true
+                    },
                     modifier = Modifier.fillMaxWidth()
-                ) { Text("Расходники CSV") }
+                ) { Text(if (isPro) "Расходники CSV" else "CSV • PRO") }
 
                 Button(
                     onClick = { shoppingListText = buildShoppingList(p, estimate) },
@@ -440,7 +587,7 @@ private fun DiamondApp() {
                 ) { Text("Подготовить список покупок") }
 
                 Text(
-                    "Тестовый режим RC. Перед публикацией подключим Google Play Billing и проверенный каталог поставщика; фиктивные артикулы не используются.",
+                    "DiamondCraft ${BuildConfig.VERSION_NAME} • Цвета изображения обозначаются HEX. Артикулы поставщиков будут показываться только после подключения проверенного каталога.",
                     style = MaterialTheme.typography.bodySmall
                 )
             }
@@ -576,6 +723,27 @@ private fun percent(value: Double): String = String.format(Locale.US, "%.1f", va
 private fun cm(value: Double): String = String.format(Locale.US, "%.1f", value)
 
 @Composable
+private fun OriginalImagePreview(image: CraftImage) {
+    val bitmap = remember(image) {
+        android.graphics.Bitmap.createBitmap(
+            image.argb,
+            image.width,
+            image.height,
+            android.graphics.Bitmap.Config.ARGB_8888
+        )
+    }
+    Image(
+        bitmap = bitmap.asImageBitmap(),
+        contentDescription = "Оригинальная фотография",
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(460.dp)
+            .background(Color(0xFFF5F5F5)),
+        contentScale = ContentScale.Fit
+    )
+}
+
+@Composable
 private fun DiamondGrid(grid: CraftGrid, onCell: (Int, Int) -> Unit) {
     var scale by remember { mutableFloatStateOf(1f) }
     var pan by remember { mutableStateOf(Offset.Zero) }
@@ -629,10 +797,10 @@ private fun DiamondGrid(grid: CraftGrid, onCell: (Int, Int) -> Unit) {
             val left = pan.x + x * cell
             val top = pan.y + y * cell
             val center = Offset(left + cell / 2, top + cell / 2)
-            drawCircle(Color(grid.palette[c.colorIndex].argb), cell * 0.38f, center)
+            drawCircle(Color(grid.palette[c.colorIndex].argb), cell * 0.46f, center)
             drawCircle(
                 if (c.completed) Color.Black else Color.Gray,
-                cell * 0.38f,
+                cell * 0.46f,
                 center,
                 style = Stroke(if (c.completed) cell * 0.16f else 1f)
             )

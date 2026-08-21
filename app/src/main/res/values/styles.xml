@@ -1,1 +1,9 @@
-<resources><style name="Theme.DiamondCraft" parent="android:style/Theme.Material.Light.NoActionBar"><item name="android:fontFamily">sans</item><item name="android:windowLightStatusBar">true</item></style></resources>
+<resources>
+    <style name="Theme.DiamondCraft" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:statusBarColor">#F8F5FF</item>
+        <item name="android:navigationBarColor">#F8F5FF</item>
+        <item name="android:windowBackground">@color/diamond_splash_bg</item>
+    </style>
+</resources>
