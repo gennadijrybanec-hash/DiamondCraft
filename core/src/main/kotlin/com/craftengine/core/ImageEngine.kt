@@ -3,7 +3,6 @@ package com.craftengine.core
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
-import kotlin.math.sqrt
 
 /** Platform-neutral image used by every Craft app. Pixels are row-major ARGB ints. */
 data class CraftImage(val width: Int, val height: Int, val pixels: IntArray) {
@@ -15,17 +14,13 @@ data class ImageConversionOptions(
     val targetWidth: Int,
     val targetHeight: Int,
     val palette: List<CraftColor>,
-    val detailBoost: Double = 0.32,
-    val saturationBoost: Double = 1.08,
-    val contrastBoost: Double = 1.06
+    val detailBoost: Double = 0.42,
+    val saturationBoost: Double = 1.16,
+    val contrastBoost: Double = 1.13
 )
 
 object ImageEngine {
-    /**
-     * Center-crop + high quality area sampling. Each cell combines a linear-light area
-     * average with a center sample so facial features, eyes, fur and edges survive the
-     * downscale instead of becoming large muddy blocks.
-     */
+    /** Center crop + area sampling with edge/detail preservation for small drill grids. */
     fun toGrid(image: CraftImage, options: ImageConversionOptions): CraftGrid {
         require(options.targetWidth > 0 && options.targetHeight > 0)
         require(options.palette.isNotEmpty())
@@ -52,10 +47,28 @@ object ImageEngine {
             val cx = (sx0 + sx1) * 0.5
             val cy = (sy0 + sy1) * 0.5
             val center = bilinear(image, cx, cy)
-            val mixed = mixAndEnhance(avg, center, options)
+            val detail = strongestDetailSample(image, avg, sx0, sy0, sx1, sy1)
+            val mixed = mixAndEnhance(avg, center, detail, options)
             cells += CraftCell(PaletteEngine.nearestColor(mixed, options.palette))
         }
         return CraftGrid(options.targetWidth, options.targetHeight, options.palette, cells)
+    }
+
+    private fun strongestDetailSample(img: CraftImage, avg: Int, x0: Double, y0: Double, x1: Double, y1: Double): Int {
+        val points = arrayOf(
+            doubleArrayOf((x0 * 3 + x1) / 4.0, (y0 * 3 + y1) / 4.0),
+            doubleArrayOf((x0 + x1 * 3) / 4.0, (y0 * 3 + y1) / 4.0),
+            doubleArrayOf((x0 * 3 + x1) / 4.0, (y0 + y1 * 3) / 4.0),
+            doubleArrayOf((x0 + x1 * 3) / 4.0, (y0 + y1 * 3) / 4.0)
+        )
+        var best = bilinear(img, points[0][0], points[0][1])
+        var bestD = rgbDistance(avg, best)
+        for (i in 1 until points.size) {
+            val c = bilinear(img, points[i][0], points[i][1])
+            val d = rgbDistance(avg, c)
+            if (d > bestD) { bestD = d; best = c }
+        }
+        return best
     }
 
     private fun averageRegionLinear(img: CraftImage, x0: Double, y0: Double, x1: Double, y1: Double): Int {
@@ -89,26 +102,37 @@ object ImageEngine {
         return argb(channel(16), channel(8), channel(0))
     }
 
-    private fun mixAndEnhance(avg: Int, center: Int, o: ImageConversionOptions): Int {
-        val detail = o.detailBoost.coerceIn(0.0, 0.65)
-        var r = mix(avg shr 16 and 255, center shr 16 and 255, detail)
-        var g = mix(avg shr 8 and 255, center shr 8 and 255, detail)
-        var b = mix(avg and 255, center and 255, detail)
+    private fun mixAndEnhance(avg: Int, center: Int, detail: Int, o: ImageConversionOptions): Int {
+        val centerWeight = o.detailBoost.coerceIn(0.0, 0.60)
+        val detailWeight = 0.14
+        var r = weighted(avg shr 16 and 255, center shr 16 and 255, detail shr 16 and 255, centerWeight, detailWeight)
+        var g = weighted(avg shr 8 and 255, center shr 8 and 255, detail shr 8 and 255, centerWeight, detailWeight)
+        var b = weighted(avg and 255, center and 255, detail and 255, centerWeight, detailWeight)
 
-        // Contrast around middle gray.
         r = ((r - 128.0) * o.contrastBoost + 128.0).roundToInt().coerceIn(0, 255)
         g = ((g - 128.0) * o.contrastBoost + 128.0).roundToInt().coerceIn(0, 255)
         b = ((b - 128.0) * o.contrastBoost + 128.0).roundToInt().coerceIn(0, 255)
 
-        // Small saturation lift: enough to separate neighboring drill colors without neon artifacts.
-        val gray = (0.299 * r + 0.587 * g + 0.114 * b)
+        val gray = 0.299 * r + 0.587 * g + 0.114 * b
         r = (gray + (r - gray) * o.saturationBoost).roundToInt().coerceIn(0, 255)
         g = (gray + (g - gray) * o.saturationBoost).roundToInt().coerceIn(0, 255)
         b = (gray + (b - gray) * o.saturationBoost).roundToInt().coerceIn(0, 255)
         return argb(r, g, b)
     }
 
-    private fun mix(a: Int, b: Int, t: Double): Int = (a * (1.0 - t) + b * t).roundToInt().coerceIn(0, 255)
+    private fun weighted(a: Int, center: Int, detail: Int, cw: Double, dw: Double): Int {
+        val aw = (1.0 - cw - dw).coerceAtLeast(0.15)
+        val norm = aw + cw + dw
+        return ((a * aw + center * cw + detail * dw) / norm).roundToInt().coerceIn(0, 255)
+    }
+
+    private fun rgbDistance(a: Int, b: Int): Int {
+        val dr = (a shr 16 and 255) - (b shr 16 and 255)
+        val dg = (a shr 8 and 255) - (b shr 8 and 255)
+        val db = (a and 255) - (b and 255)
+        return dr * dr + 2 * dg * dg + db * db
+    }
+
     private fun argb(r: Int, g: Int, b: Int): Int = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
     private fun srgbToLinear(v: Int): Double {
         val s = v / 255.0

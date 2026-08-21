@@ -38,8 +38,8 @@ class MainActivity : ComponentActivity() {
 private fun DiamondApp() {
     val context = LocalContext.current
     var project by remember { mutableStateOf<CraftProject?>(null) }
-    var width by remember { mutableFloatStateOf(60f) }
-    var colorCount by remember { mutableFloatStateOf(48f) }
+    var width by remember { mutableFloatStateOf(80f) }
+    var colorCount by remember { mutableFloatStateOf(60f) }
     var reserve by remember { mutableFloatStateOf(10f) }
     var drillShape by remember { mutableStateOf(DrillShape.SQUARE) }
     var status by remember { mutableStateOf("Выберите фотографию") }
@@ -70,7 +70,7 @@ private fun DiamondApp() {
         }.onFailure { status = "Не удалось открыть изображение" }
     }
 
-    Scaffold(topBar = { TopAppBar(title = { Text("💎 DiamondCraft 0.5") }) }) { pad ->
+    Scaffold(topBar = { TopAppBar(title = { Text("💎 DiamondCraft 0.6") }) }) { pad ->
         Column(
             Modifier.padding(pad).padding(12.dp).fillMaxSize().verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -80,7 +80,7 @@ private fun DiamondApp() {
             Slider(width, { width = it }, valueRange = 20f..160f, steps = 13)
             Text("Детализация цвета: ${colorCount.toInt()} цветов")
             Slider(colorCount, { colorCount = it }, valueRange = 24f..96f, steps = 5)
-            Text("Для портретов и животных рекомендуем 60–100 страз по ширине и 48–72 цвета.")
+            Text("Для портретов и животных рекомендуем 80–120 страз по ширине и 48–72 цвета.")
             Button(onClick = { picker.launch("image/*") }, modifier = Modifier.fillMaxWidth()) {
                 Text("Выбрать фотографию")
             }

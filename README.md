@@ -1,4 +1,4 @@
-# DiamondCraft 0.5 — Android prototype
+# DiamondCraft 0.6 — Android prototype
 
 DiamondCraft превращает фотографию в схему для алмазной мозаики и помогает вести прогресс работы.
 
@@ -34,3 +34,16 @@ DiamondCraft превращает фотографию в схему для ал
 - Linear-light area downsampling + center detail preservation
 - Mild contrast/saturation enhancement
 - Pattern width up to 160 drills
+
+
+## Dev APK signing
+Debug APKs use the bundled `diamondcraft-dev.keystore` so GitHub Actions builds can update one another on the test phone. This key is for development only and must never be used for Google Play production signing.
+
+
+## v0.6 Color & Detail Engine
+- Lab-based adaptive palette with farthest-point seeding
+- spatially uniform image sampling instead of row-major sampling
+- near-duplicate palette colors are removed
+- stronger but controlled contrast/saturation correction
+- edge/detail sample preservation inside each drill cell
+- stable dev APK signing retained for install-over-update testing

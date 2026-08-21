@@ -10,8 +10,21 @@ android {
         applicationId = "com.craftengine.diamondcraft"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "0.5.0"
+        versionCode = 5
+        versionName = "0.6"
+    }
+    signingConfigs {
+        create("dev") {
+            storeFile = file("diamondcraft-dev.keystore")
+            storePassword = "diamondcraftdev"
+            keyAlias = "diamondcraft-dev"
+            keyPassword = "diamondcraftdev"
+        }
+    }
+    buildTypes {
+        getByName("debug") {
+            signingConfig = signingConfigs.getByName("dev")
+        }
     }
     buildFeatures { compose = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
