@@ -13,7 +13,11 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.ui.input.pointer.consume
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.rememberScrollState
@@ -35,6 +39,9 @@ import java.io.File
 import java.util.Locale
 import java.util.UUID
 import kotlin.math.min
+import kotlin.math.max
+import kotlin.math.floor
+import kotlin.math.ceil
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -92,6 +99,12 @@ private fun DiamondApp() {
     var showOriginal by remember { mutableStateOf(false) }
     var showProDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
+    var showSaveAsDialog by remember { mutableStateOf(false) }
+    var saveAsName by remember { mutableStateOf("") }
+    var renameCandidate by remember { mutableStateOf<SavedProjectInfo?>(null) }
+    var renameText by remember { mutableStateOf("") }
+    val undoStack = remember { mutableStateListOf<CraftGrid>() }
+    val redoStack = remember { mutableStateListOf<CraftGrid>() }
     // RC test build: true keeps all features available while Google Play Billing is not connected yet.
     // Release build will replace this with the verified Google Play purchase entitlement.
     val isPro = true
@@ -162,6 +175,7 @@ private fun DiamondApp() {
         }.onSuccess { imported ->
             val restored = imported.copy(updatedAt = System.currentTimeMillis())
             project = restored
+            undoStack.clear(); redoStack.clear()
             sourceImage = null
             showOriginal = false
             width = restored.grid.width.toFloat().coerceIn(30f, 200f)
@@ -193,6 +207,7 @@ private fun DiamondApp() {
                 profile = imageProfile,
                 colorStyle = colorStyle
             )
+            undoStack.clear(); redoStack.clear()
             project = CraftProject(
                 id = UUID.randomUUID().toString(),
                 name = "Моя алмазная картина",
@@ -235,6 +250,7 @@ private fun DiamondApp() {
             confirmButton = {
                 TextButton(onClick = {
                     project = null
+                    undoStack.clear(); redoStack.clear()
                     sourceImage = null
                     showOriginal = false
                     shoppingListText = null
@@ -290,7 +306,7 @@ private fun DiamondApp() {
                     Text("• будущий подбор расходников по каталогам")
                     HorizontalDivider()
                     Text(
-                        "RC9 работает в тестовом Pro-режиме. Перед релизом этот флаг будет заменён реальным статусом покупки из Google Play Billing.",
+                        "RC11 работает в тестовом Pro-режиме. Перед релизом этот флаг будет заменён реальным статусом покупки из Google Play Billing.",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
@@ -329,6 +345,63 @@ private fun DiamondApp() {
             confirmButton = {
                 TextButton(onClick = { showAboutDialog = false }) { Text("Закрыть") }
             }
+        )
+    }
+
+    if (showSaveAsDialog) {
+        AlertDialog(
+            onDismissRequest = { showSaveAsDialog = false },
+            title = { Text("Сохранить проект как") },
+            text = {
+                OutlinedTextField(
+                    value = saveAsName,
+                    onValueChange = { saveAsName = it },
+                    singleLine = true,
+                    label = { Text("Название проекта") }
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val p = project ?: return@TextButton
+                    val name = saveAsName.trim().ifBlank { "Проект ${savedProjects.size + 1}" }
+                    val named = p.copy(name = name, updatedAt = System.currentTimeMillis())
+                    project = named
+                    saveProject(context, named)
+                    savedRefresh++
+                    status = "Проект сохранён: $name"
+                    showSaveAsDialog = false
+                }) { Text("Сохранить") }
+            },
+            dismissButton = { TextButton(onClick = { showSaveAsDialog = false }) { Text("Отмена") } }
+        )
+    }
+
+    renameCandidate?.let { saved ->
+        AlertDialog(
+            onDismissRequest = { renameCandidate = null },
+            title = { Text("Переименовать проект") },
+            text = {
+                OutlinedTextField(
+                    value = renameText,
+                    onValueChange = { renameText = it },
+                    singleLine = true,
+                    label = { Text("Название проекта") }
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val name = renameText.trim()
+                    if (name.isNotEmpty()) {
+                        val renamed = saved.project.copy(name = name, updatedAt = System.currentTimeMillis())
+                        saveProject(context, renamed)
+                        if (project?.id == renamed.id) project = renamed
+                        savedRefresh++
+                        status = "Проект переименован: $name"
+                    }
+                    renameCandidate = null
+                }) { Text("Переименовать") }
+            },
+            dismissButton = { TextButton(onClick = { renameCandidate = null }) { Text("Отмена") } }
         )
     }
 
@@ -445,12 +518,14 @@ private fun DiamondApp() {
                         OutlinedButton(
                             onClick = {
                                 project = saved.project
+                                undoStack.clear(); redoStack.clear()
                                 status = "Проект восстановлен: ${saved.project.name}"
                             },
                             modifier = Modifier.weight(1f)
                         ) {
                             Text("${saved.project.name} • ${saved.project.grid.width}×${saved.project.grid.height}")
                         }
+                        TextButton(onClick = { renameCandidate = saved; renameText = saved.project.name }) { Text("Имя") }
                         TextButton(onClick = { deleteCandidate = saved }) { Text("Удалить") }
                     }
                 }
@@ -468,14 +543,24 @@ private fun DiamondApp() {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         onClick = {
-                            saveProject(context, p.copy(updatedAt = System.currentTimeMillis()))
-                            savedRefresh++
-                            status = "Проект сохранён"
+                            if (p.name == "Моя алмазная картина") {
+                                saveAsName = ""
+                                showSaveAsDialog = true
+                            } else {
+                                val saved = p.copy(updatedAt = System.currentTimeMillis())
+                                project = saved
+                                saveProject(context, saved)
+                                savedRefresh++
+                                status = "Проект сохранён: ${saved.name}"
+                            }
                         },
                         modifier = Modifier.weight(1f)
                     ) { Text("Сохранить") }
                     OutlinedButton(
                         onClick = {
+                            undoStack.add(p.grid)
+                            if (undoStack.size > 50) undoStack.removeAt(0)
+                            redoStack.clear()
                             project = p.copy(
                                 grid = ProgressEngine.clear(p.grid),
                                 updatedAt = System.currentTimeMillis()
@@ -483,6 +568,30 @@ private fun DiamondApp() {
                         },
                         modifier = Modifier.weight(1f)
                     ) { Text("Снять все отметки") }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = {
+                            if (undoStack.isNotEmpty()) {
+                                redoStack.add(p.grid)
+                                val previous = undoStack.removeAt(undoStack.lastIndex)
+                                project = p.copy(grid = previous, updatedAt = System.currentTimeMillis())
+                            }
+                        },
+                        enabled = undoStack.isNotEmpty(),
+                        modifier = Modifier.weight(1f)
+                    ) { Text("↶ Назад") }
+                    OutlinedButton(
+                        onClick = {
+                            if (redoStack.isNotEmpty()) {
+                                undoStack.add(p.grid)
+                                val next = redoStack.removeAt(redoStack.lastIndex)
+                                project = p.copy(grid = next, updatedAt = System.currentTimeMillis())
+                            }
+                        },
+                        enabled = redoStack.isNotEmpty(),
+                        modifier = Modifier.weight(1f)
+                    ) { Text("↷ Вперёд") }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(
@@ -517,6 +626,9 @@ private fun DiamondApp() {
                     OriginalImagePreview(sourceImage!!)
                 } else {
                     DiamondGrid(p.grid) { x, y ->
+                        undoStack.add(p.grid)
+                        if (undoStack.size > 50) undoStack.removeAt(0)
+                        redoStack.clear()
                         project = p.copy(
                             grid = ProgressEngine.toggle(p.grid, x, y),
                             updatedAt = System.currentTimeMillis()
@@ -543,6 +655,7 @@ private fun DiamondApp() {
                 Text("Размер картины: ${cm(estimate.pictureWidthCm)} × ${cm(estimate.pictureHeightCm)} см")
                 Text("Клеевая основа с полями: ${cm(estimate.canvasWidthCm)} × ${cm(estimate.canvasHeightCm)} см")
                 Text("Стразы: ${estimate.totalExactDrills} шт. + ${estimate.reservePercent}% = ${estimate.totalRequiredDrills} шт.")
+                Text("Количество страз задаётся сеткой схемы; тип страз влияет на физический размер картины.", style = MaterialTheme.typography.bodySmall)
                 Text("Пакетиков по 200 шт.: примерно ${estimate.totalBags}")
 
                 Text("Палитра и закупка", style = MaterialTheme.typography.titleMedium)
@@ -745,8 +858,8 @@ private fun OriginalImagePreview(image: CraftImage) {
 
 @Composable
 private fun DiamondGrid(grid: CraftGrid, onCell: (Int, Int) -> Unit) {
-    var scale by remember { mutableFloatStateOf(1f) }
-    var pan by remember { mutableStateOf(Offset.Zero) }
+    var scale by remember(grid.width, grid.height) { mutableFloatStateOf(1f) }
+    var pan by remember(grid.width, grid.height) { mutableStateOf(Offset.Zero) }
 
     Canvas(
         Modifier
@@ -754,56 +867,81 @@ private fun DiamondGrid(grid: CraftGrid, onCell: (Int, Int) -> Unit) {
             .height(460.dp)
             .background(Color(0xFFF5F5F5))
             .clipToBounds()
-            .pointerInput(grid, scale) {
-                detectTransformGestures { _, panChange, zoom, _ ->
-                    val newScale = (scale * zoom).coerceIn(0.7f, 8f)
-                    val base = min(
-                        size.width.toFloat() / grid.width.toFloat(),
-                        size.height.toFloat() / grid.height.toFloat()
-                    )
-                    val contentWidth = base * newScale * grid.width
-                    val contentHeight = base * newScale * grid.height
-                    val proposed = pan + panChange
-                    val minX = min(0f, size.width.toFloat() - contentWidth)
-                    val minY = min(0f, size.height.toFloat() - contentHeight)
-                    pan = Offset(
-                        x = if (contentWidth <= size.width) 0f else proposed.x.coerceIn(minX, 0f),
-                        y = if (contentHeight <= size.height) 0f else proposed.y.coerceIn(minY, 0f)
-                    )
-                    scale = newScale
+            // One finger is intentionally left to the parent vertical scroll.
+            // Two fingers exclusively control zoom/pan of the pattern.
+            .pointerInput(grid) {
+                awaitEachGesture {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val pressed = event.changes.filter { it.pressed }
+                        if (pressed.isEmpty()) break
+                        if (pressed.size >= 2) {
+                            val zoom = event.calculateZoom()
+                            val panChange = event.calculatePan()
+                            val newScale = (scale * zoom).coerceIn(1f, 8f)
+                            val base = min(
+                                size.width.toFloat() / grid.width.toFloat(),
+                                size.height.toFloat() / grid.height.toFloat()
+                            )
+                            val contentWidth = base * newScale * grid.width
+                            val contentHeight = base * newScale * grid.height
+                            val maxPanX = max(0f, (contentWidth - size.width) / 2f)
+                            val maxPanY = max(0f, (contentHeight - size.height) / 2f)
+                            pan = Offset(
+                                (pan.x + panChange.x).coerceIn(-maxPanX, maxPanX),
+                                (pan.y + panChange.y).coerceIn(-maxPanY, maxPanY)
+                            )
+                            scale = newScale
+                            event.changes.forEach { it.consume() }
+                        }
+                    }
                 }
             }
             .pointerInput(grid, scale, pan) {
-                awaitPointerEventScope {
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        val change = event.changes.firstOrNull() ?: continue
-                        if (!change.pressed && change.previousPressed) {
-                            val base = min(size.width / grid.width.toFloat(), size.height / grid.height.toFloat())
-                            val cell = base * scale
-                            val x = ((change.position.x - pan.x) / cell).toInt()
-                            val y = ((change.position.y - pan.y) / cell).toInt()
-                            if (x in 0 until grid.width && y in 0 until grid.height) onCell(x, y)
-                        }
-                    }
+                detectTapGestures { position ->
+                    val base = min(size.width / grid.width.toFloat(), size.height / grid.height.toFloat())
+                    val cell = base * scale
+                    val contentWidth = cell * grid.width
+                    val contentHeight = cell * grid.height
+                    val originX = (size.width - contentWidth) / 2f + pan.x
+                    val originY = (size.height - contentHeight) / 2f + pan.y
+                    val x = ((position.x - originX) / cell).toInt()
+                    val y = ((position.y - originY) / cell).toInt()
+                    if (x in 0 until grid.width && y in 0 until grid.height) onCell(x, y)
                 }
             }
     ) {
         val base = min(size.width / grid.width, size.height / grid.height)
         val cell = base * scale
-        grid.cells.forEachIndexed { idx, c ->
-            val x = idx % grid.width
-            val y = idx / grid.width
-            val left = pan.x + x * cell
-            val top = pan.y + y * cell
-            val center = Offset(left + cell / 2, top + cell / 2)
-            drawCircle(Color(grid.palette[c.colorIndex].argb), cell * 0.46f, center)
-            drawCircle(
-                if (c.completed) Color.Black else Color.Gray,
-                cell * 0.46f,
-                center,
-                style = Stroke(if (c.completed) cell * 0.16f else 1f)
-            )
+        val contentWidth = cell * grid.width
+        val contentHeight = cell * grid.height
+        val originX = (size.width - contentWidth) / 2f + pan.x
+        val originY = (size.height - contentHeight) / 2f + pan.y
+
+        // Draw only cells that are actually visible. This removes most of the work
+        // while zoomed and makes page scrolling / zooming substantially smoother.
+        val firstX = max(0, floor((-originX / cell).toDouble()).toInt())
+        val lastX = min(grid.width - 1, ceil(((size.width - originX) / cell).toDouble()).toInt())
+        val firstY = max(0, floor((-originY / cell).toDouble()).toInt())
+        val lastY = min(grid.height - 1, ceil(((size.height - originY) / cell).toDouble()).toInt())
+
+        if (firstX <= lastX && firstY <= lastY) {
+            for (y in firstY..lastY) {
+                for (x in firstX..lastX) {
+                    val c = grid.cells[y * grid.width + x]
+                    val left = originX + x * cell
+                    val top = originY + y * cell
+                    val center = Offset(left + cell / 2, top + cell / 2)
+                    drawCircle(Color(grid.palette[c.colorIndex].argb), cell * 0.46f, center)
+                    drawCircle(
+                        if (c.completed) Color.Black else Color.Gray,
+                        cell * 0.46f,
+                        center,
+                        style = Stroke(if (c.completed) cell * 0.16f else 1f)
+                    )
+                }
+            }
         }
     }
 }
+
