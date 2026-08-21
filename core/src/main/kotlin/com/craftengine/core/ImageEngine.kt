@@ -26,6 +26,17 @@ enum class ImageProfile(
     LANDSCAPE("Пейзаж", 0.40, 1.16, 1.10, 1, 5)
 }
 
+enum class ColorStyle(
+    val displayName: String,
+    val saturationMultiplier: Double,
+    val contrastMultiplier: Double,
+    val vibrance: Double
+) {
+    NATURAL("Естественный", 0.98, 1.00, 0.04),
+    BRIGHT("Яркий", 1.20, 1.07, 0.12),
+    VIVID("Насыщенный", 1.38, 1.12, 0.20)
+}
+
 data class ImageConversionOptions(
     val targetWidth: Int,
     val targetHeight: Int,
@@ -46,7 +57,8 @@ object ImageEngine {
         targetWidth: Int,
         targetHeight: Int,
         requestedColors: Int,
-        profile: ImageProfile = ImageProfile.AUTO
+        profile: ImageProfile = ImageProfile.AUTO,
+        colorStyle: ColorStyle = ColorStyle.BRIGHT
     ): CraftGrid {
         require(targetWidth > 0 && targetHeight > 0)
         val sampled = sampleTarget(
@@ -54,8 +66,9 @@ object ImageEngine {
             targetWidth,
             targetHeight,
             profile.detail,
-            profile.saturation,
-            profile.contrast
+            profile.saturation * colorStyle.saturationMultiplier,
+            profile.contrast * colorStyle.contrastMultiplier,
+            colorStyle.vibrance
         )
         val cleaned = edgePreservingCleanup(sampled, targetWidth, targetHeight, profile.cleanupPasses)
         val palette = PaletteEngine.adaptivePaletteFromPixels(cleaned, requestedColors)
@@ -94,7 +107,8 @@ object ImageEngine {
         targetHeight: Int,
         detailBoost: Double,
         saturationBoost: Double,
-        contrastBoost: Double
+        contrastBoost: Double,
+        vibranceBoost: Double = 0.0
     ): IntArray {
         val sourceAspect = image.width.toDouble() / image.height
         val targetAspect = targetWidth.toDouble() / targetHeight
@@ -121,7 +135,7 @@ object ImageEngine {
             val center = bilinear(image, cx, cy)
             val detail = strongestDetailSample(image, avg, sx0, sy0, sx1, sy1)
             result[ty * targetWidth + tx] = mixAndEnhance(
-                avg, center, detail, detailBoost, saturationBoost, contrastBoost
+                avg, center, detail, detailBoost, saturationBoost, contrastBoost, vibranceBoost
             )
         }
         return result
@@ -240,7 +254,8 @@ object ImageEngine {
         detail: Int,
         detailBoost: Double,
         saturationBoost: Double,
-        contrastBoost: Double
+        contrastBoost: Double,
+        vibranceBoost: Double = 0.0
     ): Int {
         val centerWeight = detailBoost.coerceIn(0.0, 0.50)
         val detailWeight = 0.08
@@ -256,6 +271,16 @@ object ImageEngine {
         r = (gray + (r - gray) * saturationBoost).roundToInt().coerceIn(0, 255)
         g = (gray + (g - gray) * saturationBoost).roundToInt().coerceIn(0, 255)
         b = (gray + (b - gray) * saturationBoost).roundToInt().coerceIn(0, 255)
+
+        // Vibrance lifts already-colorful regions more than neutral skin/gray areas.
+        val maxC = max(r, max(g, b)).toDouble()
+        val minC = min(r, min(g, b)).toDouble()
+        val chroma = (maxC - minC) / 255.0
+        val vibranceFactor = 1.0 + vibranceBoost * (0.35 + chroma * 0.65)
+        val gray2 = 0.299 * r + 0.587 * g + 0.114 * b
+        r = (gray2 + (r - gray2) * vibranceFactor).roundToInt().coerceIn(0, 255)
+        g = (gray2 + (g - gray2) * vibranceFactor).roundToInt().coerceIn(0, 255)
+        b = (gray2 + (b - gray2) * vibranceFactor).roundToInt().coerceIn(0, 255)
         return argb(r, g, b)
     }
 

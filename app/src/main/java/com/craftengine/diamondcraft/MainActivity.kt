@@ -52,10 +52,13 @@ private fun DiamondApp() {
     var reserve by remember { mutableFloatStateOf(10f) }
     var drillShape by remember { mutableStateOf(DrillShape.SQUARE) }
     var imageProfile by remember { mutableStateOf(ImageProfile.AUTO) }
+    var colorStyle by remember { mutableStateOf(ColorStyle.BRIGHT) }
     var status by remember { mutableStateOf("Выберите фотографию") }
     var savedRefresh by remember { mutableIntStateOf(0) }
     var shoppingListText by remember { mutableStateOf<String?>(null) }
     var sourceImage by remember { mutableStateOf<CraftImage?>(null) }
+    var showNewProjectConfirm by remember { mutableStateOf(false) }
+    var deleteCandidate by remember { mutableStateOf<SavedProjectInfo?>(null) }
 
     val savedProjects = remember(savedRefresh) { listSavedProjects(context) }
 
@@ -97,6 +100,39 @@ private fun DiamondApp() {
             .onFailure { status = "Не удалось сохранить PNG" }
     }
 
+    val projectExportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/octet-stream")
+    ) { uri ->
+        val p = project ?: return@rememberLauncherForActivityResult
+        if (uri != null) runCatching {
+            context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use {
+                it.write(ProjectCodec.encode(p.copy(updatedAt = System.currentTimeMillis())))
+            } ?: error("Output stream unavailable")
+        }.onSuccess { status = "Файл проекта экспортирован" }
+            .onFailure { status = "Не удалось экспортировать проект" }
+    }
+
+    val projectImportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) runCatching {
+            val text = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                ?: error("Input stream unavailable")
+            ProjectCodec.decode(text).also { imported ->
+                require(imported.mode == CraftMode.DIAMOND_PAINTING) { "Это не проект DiamondCraft" }
+            }
+        }.onSuccess { imported ->
+            val restored = imported.copy(updatedAt = System.currentTimeMillis())
+            project = restored
+            sourceImage = null
+            width = restored.grid.width.toFloat().coerceIn(30f, 200f)
+            colorCount = restored.grid.palette.size.toFloat().coerceIn(24f, 120f)
+            saveProject(context, restored)
+            savedRefresh++
+            status = "Проект импортирован: ${restored.name}"
+        }.onFailure { status = "Не удалось импортировать файл проекта" }
+    }
+
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) runCatching {
             context.contentResolver.openInputStream(uri).use { input -> BitmapFactory.decodeStream(input) }!!
@@ -114,7 +150,8 @@ private fun DiamondApp() {
                 targetWidth = targetW,
                 targetHeight = targetH,
                 requestedColors = colorCount.toInt(),
-                profile = imageProfile
+                profile = imageProfile,
+                colorStyle = colorStyle
             )
             project = CraftProject(
                 id = UUID.randomUUID().toString(),
@@ -146,6 +183,48 @@ private fun DiamondApp() {
             },
             dismissButton = {
                 TextButton(onClick = { shoppingListText = null }) { Text("Закрыть") }
+            }
+        )
+    }
+
+    if (showNewProjectConfirm) {
+        AlertDialog(
+            onDismissRequest = { showNewProjectConfirm = false },
+            title = { Text("Новый проект") },
+            text = { Text("Очистить текущую схему и выбрать новую фотографию? Несохранённые отметки текущего проекта будут потеряны.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    project = null
+                    sourceImage = null
+                    shoppingListText = null
+                    status = "Выберите фотографию"
+                    showNewProjectConfirm = false
+                }) { Text("Очистить") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNewProjectConfirm = false }) { Text("Отмена") }
+            }
+        )
+    }
+
+    deleteCandidate?.let { saved ->
+        AlertDialog(
+            onDismissRequest = { deleteCandidate = null },
+            title = { Text("Удалить сохранённый проект?") },
+            text = { Text("${saved.project.name} • ${saved.project.grid.width}×${saved.project.grid.height}") },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (saved.file.delete()) {
+                        savedRefresh++
+                        status = "Сохранённый проект удалён"
+                    } else {
+                        status = "Не удалось удалить проект"
+                    }
+                    deleteCandidate = null
+                }) { Text("Удалить") }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteCandidate = null }) { Text("Отмена") }
             }
         )
     }
@@ -186,9 +265,28 @@ private fun DiamondApp() {
                 }
             }
 
+            Text("Цветопередача")
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                ColorStyle.entries.forEachIndexed { index, style ->
+                    SegmentedButton(
+                        selected = colorStyle == style,
+                        onClick = { colorStyle = style },
+                        shape = SegmentedButtonDefaults.itemShape(index, ColorStyle.entries.size)
+                    ) { Text(style.displayName) }
+                }
+            }
+            Text(
+                "Яркий — рекомендуемый режим для алмазной мозаики. Насыщенный сильнее подчёркивает цветные стразы.",
+                style = MaterialTheme.typography.bodySmall
+            )
+
             Button(onClick = { picker.launch("image/*") }, modifier = Modifier.fillMaxWidth()) {
                 Text("Выбрать фотографию")
             }
+            OutlinedButton(
+                onClick = { projectImportLauncher.launch(arrayOf("*/*")) },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Импорт проекта (.diamondcraft)") }
             if (sourceImage != null) {
                 OutlinedButton(
                     onClick = {
@@ -202,7 +300,8 @@ private fun DiamondApp() {
                                 targetWidth = targetW,
                                 targetHeight = targetH,
                                 requestedColors = colorCount.toInt(),
-                                profile = imageProfile
+                                profile = imageProfile,
+                                colorStyle = colorStyle
                             )
                         }.onSuccess { grid ->
                             project = CraftProject(
@@ -212,7 +311,7 @@ private fun DiamondApp() {
                                 grid = grid,
                                 updatedAt = System.currentTimeMillis()
                             )
-                            status = "Схема пересчитана: ${grid.width} × ${grid.height} • ${grid.palette.size} цветов • ${imageProfile.displayName}"
+                            status = "Схема пересчитана: ${grid.width} × ${grid.height} • ${grid.palette.size} цветов • ${imageProfile.displayName} • ${colorStyle.displayName}"
                         }.onFailure { status = "Не удалось пересчитать схему" }
                     },
                     modifier = Modifier.fillMaxWidth()
@@ -234,10 +333,7 @@ private fun DiamondApp() {
                         ) {
                             Text("${saved.project.name} • ${saved.project.grid.width}×${saved.project.grid.height}")
                         }
-                        TextButton(onClick = {
-                            saved.file.delete()
-                            savedRefresh++
-                        }) { Text("Удалить") }
+                        TextButton(onClick = { deleteCandidate = saved }) { Text("Удалить") }
                     }
                 }
             }
@@ -268,7 +364,19 @@ private fun DiamondApp() {
                             )
                         },
                         modifier = Modifier.weight(1f)
-                    ) { Text("Сбросить прогресс") }
+                    ) { Text("Снять все отметки") }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = { showNewProjectConfirm = true },
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Новый проект") }
+                    OutlinedButton(
+                        onClick = {
+                            projectExportLauncher.launch("DiamondCraft_${p.grid.width}x${p.grid.height}.diamondcraft")
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Экспорт проекта") }
                 }
 
                 DiamondGrid(p.grid) { x, y ->
