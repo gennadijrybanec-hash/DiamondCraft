@@ -55,6 +55,7 @@ private fun DiamondApp() {
     var status by remember { mutableStateOf("Выберите фотографию") }
     var savedRefresh by remember { mutableIntStateOf(0) }
     var shoppingListText by remember { mutableStateOf<String?>(null) }
+    var sourceImage by remember { mutableStateOf<CraftImage?>(null) }
 
     val savedProjects = remember(savedRefresh) { listSavedProjects(context) }
 
@@ -105,6 +106,7 @@ private fun DiamondApp() {
             val pixels = IntArray(bmp.width * bmp.height)
             bmp.getPixels(pixels, 0, bmp.width, 0, 0, bmp.width, bmp.height)
             val source = CraftImage(bmp.width, bmp.height, pixels)
+            sourceImage = source
 
             status = "Анализируем фотографию…"
             val grid = ImageEngine.toAdaptiveGrid(
@@ -187,6 +189,35 @@ private fun DiamondApp() {
             Button(onClick = { picker.launch("image/*") }, modifier = Modifier.fillMaxWidth()) {
                 Text("Выбрать фотографию")
             }
+            if (sourceImage != null) {
+                OutlinedButton(
+                    onClick = {
+                        val source = sourceImage ?: return@OutlinedButton
+                        val targetW = width.toInt().coerceIn(30, 200)
+                        val targetH = (targetW * source.height.toFloat() / source.width).toInt().coerceIn(30, 280)
+                        status = "Пересчитываем схему…"
+                        runCatching {
+                            ImageEngine.toAdaptiveGrid(
+                                image = source,
+                                targetWidth = targetW,
+                                targetHeight = targetH,
+                                requestedColors = colorCount.toInt(),
+                                profile = imageProfile
+                            )
+                        }.onSuccess { grid ->
+                            project = CraftProject(
+                                id = project?.id ?: UUID.randomUUID().toString(),
+                                name = project?.name ?: "Моя алмазная картина",
+                                mode = CraftMode.DIAMOND_PAINTING,
+                                grid = grid,
+                                updatedAt = System.currentTimeMillis()
+                            )
+                            status = "Схема пересчитана: ${grid.width} × ${grid.height} • ${grid.palette.size} цветов • ${imageProfile.displayName}"
+                        }.onFailure { status = "Не удалось пересчитать схему" }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Пересчитать с текущими настройками") }
+            }
             Text(status)
 
             if (savedProjects.isNotEmpty()) {
@@ -218,7 +249,7 @@ private fun DiamondApp() {
                 HorizontalDivider()
                 Text("Проект", style = MaterialTheme.typography.titleMedium)
                 Text("${p.grid.width} × ${p.grid.height} • ${p.grid.palette.size} цветов")
-                Text("Установлено: ${stats.completedDrills} / ${stats.totalDrills} • ${p.grid.progressPercent()}%")
+                Text("Установлено: ${stats.completedDrills} / ${stats.totalDrills} • ${percent(p.grid.progressPercentExact())}%")
 
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
@@ -269,6 +300,7 @@ private fun DiamondApp() {
                 Text("Пакетиков по 200 шт.: примерно ${estimate.totalBags}")
 
                 Text("Палитра и закупка", style = MaterialTheme.typography.titleMedium)
+                Text("Цвета HEX рассчитаны по фотографии. Реальные артикулы магазина будут подбираться только из подключённого каталога.", style = MaterialTheme.typography.bodySmall)
                 estimate.colors.forEachIndexed { i, item ->
                     Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
                         Box(Modifier.size(22.dp).background(Color(item.color.argb)))
@@ -300,7 +332,7 @@ private fun DiamondApp() {
                 ) { Text("Подготовить список покупок") }
 
                 Text(
-                    "Free: генерация и сохранение проектов. Pro: расширенный экспорт, большие схемы и магазины будут подключены после настройки Google Play Billing.",
+                    "Тестовый режим RC. Перед публикацией подключим Google Play Billing и проверенный каталог поставщика; фиктивные артикулы не используются.",
                     style = MaterialTheme.typography.bodySmall
                 )
             }
@@ -432,6 +464,7 @@ private fun writePatternPng(output: java.io.OutputStream, project: CraftProject)
     bitmap.recycle()
 }
 
+private fun percent(value: Double): String = String.format(Locale.US, "%.1f", value)
 private fun cm(value: Double): String = String.format(Locale.US, "%.1f", value)
 
 @Composable

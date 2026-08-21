@@ -1,19 +1,15 @@
-# DiamondCraft 1.0 RC1
+# DiamondCraft 1.0 RC2
 
-Release-candidate build based on the phone-tested beta3.
+Коммерческий release-candidate на базе протестированного RC1.
 
-Included:
-- adaptive photo-to-diamond grid engine with Auto / Portrait / Object / Landscape profiles;
-- 30–200 drills width and 24–120 adaptive colors;
-- perceptual Lab color matching and edge-preserving cleanup;
-- honest HEX/RGB adaptive color identifiers (no fake supplier/DMC product codes);
-- bounded zoom/pan grid viewport;
-- progress tracking and reset;
-- multiple local saved projects;
-- square/round drill material estimates, reserve, canvas size and bags;
-- visible shopping list with copy action;
-- CSV and PDF material export;
-- stable dev signing key and versionCode 110 for in-place test updates;
-- architecture remains ready for a future real supplier catalog / affiliate shop mapping and Google Play Billing.
+Изменения RC2:
+- повторный пересчёт той же фотографии без выбора файла заново;
+- профили Авто / Портрет / Предмет / Пейзаж применяются к текущему фото через кнопку пересчёта;
+- удаление одиночных цветовых «островков» после квантования без размытия основных границ;
+- прогресс показывается с точностью до 0.1%;
+- честные HEX/RGB цвета без фиктивных товарных кодов;
+- предупреждение, что артикулы магазина появятся только после подключения проверенного каталога;
+- CSV, PDF, PNG, проекты, расходники, список покупок и ограниченное масштабирование сохранены;
+- versionCode 120 для обновления поверх RC1 с тем же dev-ключом.
 
-Important: adaptive HEX colors are image-derived. A supplier-specific SKU/DMC mapping must only be added from a verified physical drill catalog.
+Перед публичным Google Play релизом отдельно нужны: реальный каталог поставщика/партнёрские ссылки, Google Play Billing, privacy policy и store assets.

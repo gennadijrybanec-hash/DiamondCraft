@@ -12,11 +12,18 @@ data class CraftImage(val width: Int, val height: Int, val pixels: IntArray) {
 
 
 
-enum class ImageProfile(val displayName: String, val detail: Double, val saturation: Double, val contrast: Double, val cleanupPasses: Int) {
-    AUTO("Авто", 0.36, 1.10, 1.08, 1),
-    PORTRAIT("Портрет", 0.30, 1.05, 1.06, 1),
-    OBJECT("Предмет", 0.42, 1.12, 1.10, 1),
-    LANDSCAPE("Пейзаж", 0.38, 1.14, 1.09, 1)
+enum class ImageProfile(
+    val displayName: String,
+    val detail: Double,
+    val saturation: Double,
+    val contrast: Double,
+    val cleanupPasses: Int,
+    val islandVotes: Int
+) {
+    AUTO("Авто", 0.36, 1.10, 1.08, 1, 6),
+    PORTRAIT("Портрет", 0.28, 1.04, 1.05, 1, 7),
+    OBJECT("Предмет", 0.46, 1.14, 1.12, 1, 5),
+    LANDSCAPE("Пейзаж", 0.40, 1.16, 1.10, 1, 5)
 }
 
 data class ImageConversionOptions(
@@ -53,7 +60,9 @@ object ImageEngine {
         val cleaned = edgePreservingCleanup(sampled, targetWidth, targetHeight, profile.cleanupPasses)
         val palette = PaletteEngine.adaptivePaletteFromPixels(cleaned, requestedColors)
         val matcher = PaletteEngine.matcher(palette)
-        val cells = cleaned.map { CraftCell(matcher.nearest(it)) }
+        val mapped = IntArray(cleaned.size) { matcher.nearest(cleaned[it]) }
+        val stable = cleanupMappedIslands(mapped, targetWidth, targetHeight, profile.islandVotes)
+        val cells = stable.map { CraftCell(it) }
         return CraftGrid(targetWidth, targetHeight, palette, cells)
     }
 
@@ -154,6 +163,27 @@ object ImageEngine {
             current = out
         }
         return current
+    }
+
+    /** Removes only obvious one-cell palette islands after quantization. */
+    private fun cleanupMappedIslands(src: IntArray, width: Int, height: Int, requiredVotes: Int): IntArray {
+        if (width < 3 || height < 3) return src
+        val out = src.copyOf()
+        for (y in 1 until height - 1) for (x in 1 until width - 1) {
+            val index = y * width + x
+            val center = src[index]
+            val counts = HashMap<Int, Int>(8)
+            for (dy in -1..1) for (dx in -1..1) {
+                if (dx == 0 && dy == 0) continue
+                val value = src[(y + dy) * width + (x + dx)]
+                counts[value] = (counts[value] ?: 0) + 1
+            }
+            val winner = counts.maxByOrNull { it.value }
+            if (winner != null && winner.key != center && winner.value >= requiredVotes) {
+                out[index] = winner.key
+            }
+        }
+        return out
     }
 
     private fun strongestDetailSample(img: CraftImage, avg: Int, x0: Double, y0: Double, x1: Double, y1: Double): Int {
