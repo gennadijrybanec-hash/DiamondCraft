@@ -1,4 +1,4 @@
-# DiamondCraft 0.4 — Android prototype
+# DiamondCraft 0.5 — Android prototype
 
 DiamondCraft превращает фотографию в схему для алмазной мозаики и помогает вести прогресс работы.
 
@@ -26,3 +26,11 @@ DiamondCraft превращает фотографию в схему для ал
 Реальная палитра страз, сохранение/открытие проектов, PDF/PNG/CSV, улучшение качества конвертации изображения, Free/Pro, интеграции магазинов/партнёрских ссылок и подготовка релиза Google Play.
 
 Версия 0.4 остаётся рабочим прототипом, а не финальным коммерческим релизом.
+
+
+## v0.5 Quality Engine
+- Adaptive 24–96 color palette generated from the source image
+- Perceptual weighted color matching
+- Linear-light area downsampling + center detail preservation
+- Mild contrast/saturation enhancement
+- Pattern width up to 160 drills

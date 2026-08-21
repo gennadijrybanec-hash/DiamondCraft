@@ -33,21 +33,13 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private val demoPalette = listOf(
-    CraftColor("01", "Белый", 0xFFFFFFFF.toInt()), CraftColor("02", "Чёрный", 0xFF202020.toInt()),
-    CraftColor("03", "Красный", 0xFFD84A4A.toInt()), CraftColor("04", "Оранжевый", 0xFFF19A3E.toInt()),
-    CraftColor("05", "Жёлтый", 0xFFF1D54A.toInt()), CraftColor("06", "Зелёный", 0xFF4F9A67.toInt()),
-    CraftColor("07", "Голубой", 0xFF5BA7D9.toInt()), CraftColor("08", "Синий", 0xFF4D63B8.toInt()),
-    CraftColor("09", "Фиолетовый", 0xFF8D62B5.toInt()), CraftColor("10", "Розовый", 0xFFD77EA3.toInt()),
-    CraftColor("11", "Коричневый", 0xFF8A6546.toInt()), CraftColor("12", "Бежевый", 0xFFD7BC92.toInt())
-)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DiamondApp() {
     val context = LocalContext.current
     var project by remember { mutableStateOf<CraftProject?>(null) }
-    var width by remember { mutableFloatStateOf(40f) }
+    var width by remember { mutableFloatStateOf(60f) }
+    var colorCount by remember { mutableFloatStateOf(48f) }
     var reserve by remember { mutableFloatStateOf(10f) }
     var drillShape by remember { mutableStateOf(DrillShape.SQUARE) }
     var status by remember { mutableStateOf("Выберите фотографию") }
@@ -56,13 +48,16 @@ private fun DiamondApp() {
         if (uri != null) runCatching {
             context.contentResolver.openInputStream(uri).use { input -> BitmapFactory.decodeStream(input) }!!
         }.onSuccess { bmp ->
-            val maxSide = width.toInt().coerceIn(20, 100)
-            val h = (maxSide * bmp.height.toFloat() / bmp.width).toInt().coerceIn(20, 120)
+            val maxSide = width.toInt().coerceIn(20, 160)
+            val h = (maxSide * bmp.height.toFloat() / bmp.width).toInt().coerceIn(20, 220)
             val px = IntArray(bmp.width * bmp.height)
             bmp.getPixels(px, 0, bmp.width, 0, 0, bmp.width, bmp.height)
+            val source = CraftImage(bmp.width, bmp.height, px)
+            status = "Анализ цветов и деталей…"
+            val adaptivePalette = PaletteEngine.adaptivePalette(source, colorCount.toInt())
             val grid = ImageEngine.toGrid(
-                CraftImage(bmp.width, bmp.height, px),
-                ImageConversionOptions(maxSide, h, demoPalette)
+                source,
+                ImageConversionOptions(maxSide, h, adaptivePalette)
             )
             project = CraftProject(
                 UUID.randomUUID().toString(),
@@ -75,14 +70,17 @@ private fun DiamondApp() {
         }.onFailure { status = "Не удалось открыть изображение" }
     }
 
-    Scaffold(topBar = { TopAppBar(title = { Text("💎 DiamondCraft 0.4") }) }) { pad ->
+    Scaffold(topBar = { TopAppBar(title = { Text("💎 DiamondCraft 0.5") }) }) { pad ->
         Column(
             Modifier.padding(pad).padding(12.dp).fillMaxSize().verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text("Фото → схема алмазной мозаики", style = MaterialTheme.typography.titleMedium)
             Text("Ширина схемы: ${width.toInt()} страз")
-            Slider(width, { width = it }, valueRange = 20f..100f, steps = 7)
+            Slider(width, { width = it }, valueRange = 20f..160f, steps = 13)
+            Text("Детализация цвета: ${colorCount.toInt()} цветов")
+            Slider(colorCount, { colorCount = it }, valueRange = 24f..96f, steps = 5)
+            Text("Для портретов и животных рекомендуем 60–100 страз по ширине и 48–72 цвета.")
             Button(onClick = { picker.launch("image/*") }, modifier = Modifier.fillMaxWidth()) {
                 Text("Выбрать фотографию")
             }
