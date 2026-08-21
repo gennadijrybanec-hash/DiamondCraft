@@ -726,7 +726,7 @@ private fun cm(value: Double): String = String.format(Locale.US, "%.1f", value)
 private fun OriginalImagePreview(image: CraftImage) {
     val bitmap = remember(image) {
         android.graphics.Bitmap.createBitmap(
-            image.argb,
+            image.pixels,
             image.width,
             image.height,
             android.graphics.Bitmap.Config.ARGB_8888
