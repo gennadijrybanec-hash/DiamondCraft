@@ -10,7 +10,13 @@
 - «Подготовить список покупок» теперь открывает видимый список с количеством страз, пакетиков и размером основы;
 - список покупок можно скопировать в буфер обмена;
 - CSV и PDF экспорт сохранены;
-- versionCode 101, versionName 1.0-beta2;
+- versionCode 101, versionName 1.0-beta3;
 - используется тот же постоянный dev signing key, что beta1, для установки поверх предыдущей версии.
 
 Тест обновления: НЕ удалять beta1. Установить APK beta2 поверх него — Android должен предложить обновление.
+
+
+## Beta 3 fix
+- Grid viewport clips drawing to its own bounds.
+- Pan is constrained so zoomed pattern cannot cover controls above/below the grid.
+- versionCode 102 for in-place update from beta2.

@@ -15,6 +15,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -386,10 +387,24 @@ private fun DiamondGrid(grid: CraftGrid, onCell: (Int, Int) -> Unit) {
             .fillMaxWidth()
             .height(460.dp)
             .background(Color(0xFFF5F5F5))
-            .pointerInput(grid, scale, pan) {
+            .clipToBounds()
+            .pointerInput(grid, scale) {
                 detectTransformGestures { _, panChange, zoom, _ ->
-                    scale = (scale * zoom).coerceIn(0.7f, 8f)
-                    pan += panChange
+                    val newScale = (scale * zoom).coerceIn(0.7f, 8f)
+                    val base = min(
+                        size.width.toFloat() / grid.width.toFloat(),
+                        size.height.toFloat() / grid.height.toFloat()
+                    )
+                    val contentWidth = base * newScale * grid.width
+                    val contentHeight = base * newScale * grid.height
+                    val proposed = pan + panChange
+                    val minX = min(0f, size.width.toFloat() - contentWidth)
+                    val minY = min(0f, size.height.toFloat() - contentHeight)
+                    pan = Offset(
+                        x = if (contentWidth <= size.width) 0f else proposed.x.coerceIn(minX, 0f),
+                        y = if (contentHeight <= size.height) 0f else proposed.y.coerceIn(minY, 0f)
+                    )
+                    scale = newScale
                 }
             }
             .pointerInput(grid, scale, pan) {
