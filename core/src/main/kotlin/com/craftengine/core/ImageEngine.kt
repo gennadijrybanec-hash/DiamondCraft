@@ -10,6 +10,15 @@ data class CraftImage(val width: Int, val height: Int, val pixels: IntArray) {
     operator fun get(x: Int, y: Int): Int = pixels[y * width + x]
 }
 
+
+
+enum class ImageProfile(val displayName: String, val detail: Double, val saturation: Double, val contrast: Double, val cleanupPasses: Int) {
+    AUTO("Авто", 0.36, 1.10, 1.08, 1),
+    PORTRAIT("Портрет", 0.30, 1.05, 1.06, 1),
+    OBJECT("Предмет", 0.42, 1.12, 1.10, 1),
+    LANDSCAPE("Пейзаж", 0.38, 1.14, 1.09, 1)
+}
+
 data class ImageConversionOptions(
     val targetWidth: Int,
     val targetHeight: Int,
@@ -30,20 +39,18 @@ object ImageEngine {
         targetWidth: Int,
         targetHeight: Int,
         requestedColors: Int,
-        detailBoost: Double = 0.34,
-        saturationBoost: Double = 1.10,
-        contrastBoost: Double = 1.08
+        profile: ImageProfile = ImageProfile.AUTO
     ): CraftGrid {
         require(targetWidth > 0 && targetHeight > 0)
         val sampled = sampleTarget(
             image,
             targetWidth,
             targetHeight,
-            detailBoost,
-            saturationBoost,
-            contrastBoost
+            profile.detail,
+            profile.saturation,
+            profile.contrast
         )
-        val cleaned = edgePreservingCleanup(sampled, targetWidth, targetHeight)
+        val cleaned = edgePreservingCleanup(sampled, targetWidth, targetHeight, profile.cleanupPasses)
         val palette = PaletteEngine.adaptivePaletteFromPixels(cleaned, requestedColors)
         val matcher = PaletteEngine.matcher(palette)
         val cells = cleaned.map { CraftCell(matcher.nearest(it)) }
@@ -115,10 +122,10 @@ object ImageEngine {
      * Removes isolated one-cell noise while keeping real edges. A neighbour contributes only
      * when it is perceptually close to the center cell, so facial outlines and object borders stay sharp.
      */
-    private fun edgePreservingCleanup(src: IntArray, width: Int, height: Int): IntArray {
+    private fun edgePreservingCleanup(src: IntArray, width: Int, height: Int, passes: Int = 1): IntArray {
         if (width < 3 || height < 3) return src
         var current = src
-        repeat(2) {
+        repeat(passes.coerceIn(0, 2)) {
             val out = current.copyOf()
             for (y in 1 until height - 1) for (x in 1 until width - 1) {
                 val center = current[y * width + x]

@@ -39,7 +39,7 @@ object PaletteEngine {
      */
     fun adaptivePaletteFromPixels(pixels: IntArray, requestedColors: Int): List<CraftColor> {
         val wanted = requestedColors.coerceIn(12, 120)
-        if (pixels.isEmpty()) return listOf(CraftColor("DC001", "Цвет 1", 0xFF808080.toInt()))
+        if (pixels.isEmpty()) return listOf(CraftColor("#808080", "RGB #808080", 0xFF808080.toInt()))
 
         data class Bin(var count: Int = 0, var sr: Long = 0, var sg: Long = 0, var sb: Long = 0)
         val bins = HashMap<Int, Bin>()
@@ -59,7 +59,11 @@ object PaletteEngine {
         }
         if (points.size <= wanted) {
             return points.sortedBy { it.lab[0] }.mapIndexed { index, p ->
-                CraftColor("DC${(index + 1).toString().padStart(3, '0')}", "Цвет ${index + 1}", labToArgb(p.lab))
+                run {
+                    val argb = labToArgb(p.lab)
+                    val hex = "#%06X".format(argb and 0xFFFFFF)
+                    CraftColor(hex, "RGB $hex", argb)
+                }
             }
         }
 
@@ -103,11 +107,11 @@ object PaletteEngine {
         }
 
         return unique.sortedBy { it[0] }.mapIndexed { index, lab ->
-            CraftColor(
-                id = "DC${(index + 1).toString().padStart(3, '0')}",
-                name = "Цвет ${index + 1}",
-                argb = labToArgb(lab)
-            )
+            run {
+                val argb = labToArgb(lab)
+                val hex = "#%06X".format(argb and 0xFFFFFF)
+                CraftColor(id = hex, name = "RGB $hex", argb = argb)
+            }
         }
     }
 

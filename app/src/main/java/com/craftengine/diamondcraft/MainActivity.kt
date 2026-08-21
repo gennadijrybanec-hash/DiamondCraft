@@ -51,6 +51,7 @@ private fun DiamondApp() {
     var colorCount by remember { mutableFloatStateOf(72f) }
     var reserve by remember { mutableFloatStateOf(10f) }
     var drillShape by remember { mutableStateOf(DrillShape.SQUARE) }
+    var imageProfile by remember { mutableStateOf(ImageProfile.AUTO) }
     var status by remember { mutableStateOf("Выберите фотографию") }
     var savedRefresh by remember { mutableIntStateOf(0) }
     var shoppingListText by remember { mutableStateOf<String?>(null) }
@@ -83,6 +84,18 @@ private fun DiamondApp() {
             .onFailure { status = "Не удалось сохранить PDF" }
     }
 
+    val pngLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("image/png")
+    ) { uri ->
+        val p = project ?: return@rememberLauncherForActivityResult
+        if (uri != null) runCatching {
+            context.contentResolver.openOutputStream(uri)?.use { output ->
+                writePatternPng(output, p)
+            }
+        }.onSuccess { status = "PNG сохранён" }
+            .onFailure { status = "Не удалось сохранить PNG" }
+    }
+
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) runCatching {
             context.contentResolver.openInputStream(uri).use { input -> BitmapFactory.decodeStream(input) }!!
@@ -99,9 +112,7 @@ private fun DiamondApp() {
                 targetWidth = targetW,
                 targetHeight = targetH,
                 requestedColors = colorCount.toInt(),
-                detailBoost = 0.34,
-                saturationBoost = 1.10,
-                contrastBoost = 1.08
+                profile = imageProfile
             )
             project = CraftProject(
                 id = UUID.randomUUID().toString(),
@@ -161,6 +172,17 @@ private fun DiamondApp() {
             Slider(colorCount, { colorCount = it }, valueRange = 24f..120f, steps = 7)
 
             Text("Для портретов: 100–140 страз и 60–84 цвета. Для пейзажей: 120–180 и 72–108 цветов.")
+
+            Text("Профиль обработки")
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                ImageProfile.entries.forEachIndexed { index, profile ->
+                    SegmentedButton(
+                        selected = imageProfile == profile,
+                        onClick = { imageProfile = profile },
+                        shape = SegmentedButtonDefaults.itemShape(index, ImageProfile.entries.size)
+                    ) { Text(profile.displayName) }
+                }
+            }
 
             Button(onClick = { picker.launch("image/*") }, modifier = Modifier.fillMaxWidth()) {
                 Text("Выбрать фотографию")
@@ -252,21 +274,25 @@ private fun DiamondApp() {
                         Box(Modifier.size(22.dp).background(Color(item.color.argb)))
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            "${i + 1}. ${item.color.id} — ${item.exactCount} шт.; купить ${item.requiredCount} (${item.bags} пак.)"
+                             "${i + 1}. ${item.color.id} — ${item.exactCount} шт.; купить ${item.requiredCount} (${item.bags} пак.)"
                         )
                     }
                 }
 
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(
-                        onClick = { csvLauncher.launch("DiamondCraft_${p.grid.width}x${p.grid.height}_materials.csv") },
+                        onClick = { pngLauncher.launch("DiamondCraft_${p.grid.width}x${p.grid.height}_pattern.png") },
                         modifier = Modifier.weight(1f)
-                    ) { Text("Экспорт CSV") }
+                    ) { Text("Схема PNG") }
                     OutlinedButton(
                         onClick = { pdfLauncher.launch("DiamondCraft_${p.grid.width}x${p.grid.height}_materials.pdf") },
                         modifier = Modifier.weight(1f)
-                    ) { Text("Экспорт PDF") }
+                    ) { Text("Расходники PDF") }
                 }
+                OutlinedButton(
+                    onClick = { csvLauncher.launch("DiamondCraft_${p.grid.width}x${p.grid.height}_materials.csv") },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Расходники CSV") }
 
                 Button(
                     onClick = { shoppingListText = buildShoppingList(p, estimate) },
@@ -373,6 +399,37 @@ private fun writeMaterialsPdf(output: java.io.OutputStream, project: CraftProjec
     pdf.finishPage(page)
     pdf.writeTo(output)
     pdf.close()
+}
+
+private fun writePatternPng(output: java.io.OutputStream, project: CraftProject) {
+    val grid = project.grid
+    // Keep memory predictable even for 200×280 projects.
+    val cellPx = min(14, maxOf(6, 2800 / maxOf(grid.width, grid.height)))
+    val bitmap = android.graphics.Bitmap.createBitmap(
+        grid.width * cellPx,
+        grid.height * cellPx,
+        android.graphics.Bitmap.Config.ARGB_8888
+    )
+    val canvas = android.graphics.Canvas(bitmap)
+    canvas.drawColor(android.graphics.Color.WHITE)
+    val fill = Paint(Paint.ANTI_ALIAS_FLAG)
+    val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 1f
+        color = android.graphics.Color.argb(90, 60, 60, 60)
+    }
+    grid.cells.forEachIndexed { index, cell ->
+        if (cell.hidden) return@forEachIndexed
+        val x = index % grid.width
+        val y = index / grid.width
+        val left = x * cellPx.toFloat()
+        val top = y * cellPx.toFloat()
+        fill.color = grid.palette[cell.colorIndex].argb
+        canvas.drawRect(left, top, left + cellPx, top + cellPx, fill)
+        if (cellPx >= 8) canvas.drawRect(left, top, left + cellPx, top + cellPx, line)
+    }
+    bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, output)
+    bitmap.recycle()
 }
 
 private fun cm(value: Double): String = String.format(Locale.US, "%.1f", value)

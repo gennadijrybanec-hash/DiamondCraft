@@ -1,22 +1,19 @@
-# DiamondCraft 1.0 beta2
+# DiamondCraft 1.0 RC1
 
-Комплексная тестовая сборка генератора схем алмазной мозаики.
+Release-candidate build based on the phone-tested beta3.
 
-Изменения beta2:
-- новый адаптивный Photo Engine: палитра строится по итоговой сетке, а не по исходным пикселям;
-- сопоставление оттенков в Lab-пространстве;
-- частотно-взвешенная палитра, чтобы фон не вытеснял важные оттенки объекта;
-- edge-preserving cleanup уменьшает одиночный цветовой шум, сохраняя границы;
-- «Подготовить список покупок» теперь открывает видимый список с количеством страз, пакетиков и размером основы;
-- список покупок можно скопировать в буфер обмена;
-- CSV и PDF экспорт сохранены;
-- versionCode 101, versionName 1.0-beta3;
-- используется тот же постоянный dev signing key, что beta1, для установки поверх предыдущей версии.
+Included:
+- adaptive photo-to-diamond grid engine with Auto / Portrait / Object / Landscape profiles;
+- 30–200 drills width and 24–120 adaptive colors;
+- perceptual Lab color matching and edge-preserving cleanup;
+- honest HEX/RGB adaptive color identifiers (no fake supplier/DMC product codes);
+- bounded zoom/pan grid viewport;
+- progress tracking and reset;
+- multiple local saved projects;
+- square/round drill material estimates, reserve, canvas size and bags;
+- visible shopping list with copy action;
+- CSV and PDF material export;
+- stable dev signing key and versionCode 110 for in-place test updates;
+- architecture remains ready for a future real supplier catalog / affiliate shop mapping and Google Play Billing.
 
-Тест обновления: НЕ удалять beta1. Установить APK beta2 поверх него — Android должен предложить обновление.
-
-
-## Beta 3 fix
-- Grid viewport clips drawing to its own bounds.
-- Pan is constrained so zoomed pattern cannot cover controls above/below the grid.
-- versionCode 102 for in-place update from beta2.
+Important: adaptive HEX colors are image-derived. A supplier-specific SKU/DMC mapping must only be added from a verified physical drill catalog.
