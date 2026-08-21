@@ -20,12 +20,68 @@ data class ImageConversionOptions(
 )
 
 object ImageEngine {
-    /** Center crop + area sampling with edge/detail preservation for small drill grids. */
+    /**
+     * Production path for photographs: first creates the exact target-cell image,
+     * performs edge-preserving cleanup, then builds the palette from those cells.
+     * This avoids wasting palette entries on source pixels that disappear after down-sampling.
+     */
+    fun toAdaptiveGrid(
+        image: CraftImage,
+        targetWidth: Int,
+        targetHeight: Int,
+        requestedColors: Int,
+        detailBoost: Double = 0.34,
+        saturationBoost: Double = 1.10,
+        contrastBoost: Double = 1.08
+    ): CraftGrid {
+        require(targetWidth > 0 && targetHeight > 0)
+        val sampled = sampleTarget(
+            image,
+            targetWidth,
+            targetHeight,
+            detailBoost,
+            saturationBoost,
+            contrastBoost
+        )
+        val cleaned = edgePreservingCleanup(sampled, targetWidth, targetHeight)
+        val palette = PaletteEngine.adaptivePaletteFromPixels(cleaned, requestedColors)
+        val matcher = PaletteEngine.matcher(palette)
+        val cells = cleaned.map { CraftCell(matcher.nearest(it)) }
+        return CraftGrid(targetWidth, targetHeight, palette, cells)
+    }
+
+    /** Center crop + area sampling with edge/detail preservation for a supplied physical palette. */
     fun toGrid(image: CraftImage, options: ImageConversionOptions): CraftGrid {
         require(options.targetWidth > 0 && options.targetHeight > 0)
         require(options.palette.isNotEmpty())
+        val sampled = sampleTarget(
+            image,
+            options.targetWidth,
+            options.targetHeight,
+            options.detailBoost,
+            options.saturationBoost,
+            options.contrastBoost
+        )
+        val cleaned = edgePreservingCleanup(sampled, options.targetWidth, options.targetHeight)
+        val matcher = PaletteEngine.matcher(options.palette)
+        return CraftGrid(
+            options.targetWidth,
+            options.targetHeight,
+            options.palette,
+            cleaned.map { CraftCell(matcher.nearest(it)) }
+        )
+    }
+
+    private fun sampleTarget(
+        image: CraftImage,
+        targetWidth: Int,
+        targetHeight: Int,
+        detailBoost: Double,
+        saturationBoost: Double,
+        contrastBoost: Double
+    ): IntArray {
         val sourceAspect = image.width.toDouble() / image.height
-        val targetAspect = options.targetWidth.toDouble() / options.targetHeight
+        val targetAspect = targetWidth.toDouble() / targetHeight
         val cropW: Double
         val cropH: Double
         if (sourceAspect > targetAspect) {
@@ -35,23 +91,62 @@ object ImageEngine {
         }
         val left = (image.width - cropW) / 2.0
         val top = (image.height - cropH) / 2.0
-        val cells = ArrayList<CraftCell>(options.targetWidth * options.targetHeight)
+        val result = IntArray(targetWidth * targetHeight)
 
-        for (ty in 0 until options.targetHeight) for (tx in 0 until options.targetWidth) {
-            val sx0 = left + tx * cropW / options.targetWidth
-            val sy0 = top + ty * cropH / options.targetHeight
-            val sx1 = left + (tx + 1) * cropW / options.targetWidth
-            val sy1 = top + (ty + 1) * cropH / options.targetHeight
+        for (ty in 0 until targetHeight) for (tx in 0 until targetWidth) {
+            val sx0 = left + tx * cropW / targetWidth
+            val sy0 = top + ty * cropH / targetHeight
+            val sx1 = left + (tx + 1) * cropW / targetWidth
+            val sy1 = top + (ty + 1) * cropH / targetHeight
 
             val avg = averageRegionLinear(image, sx0, sy0, sx1, sy1)
             val cx = (sx0 + sx1) * 0.5
             val cy = (sy0 + sy1) * 0.5
             val center = bilinear(image, cx, cy)
             val detail = strongestDetailSample(image, avg, sx0, sy0, sx1, sy1)
-            val mixed = mixAndEnhance(avg, center, detail, options)
-            cells += CraftCell(PaletteEngine.nearestColor(mixed, options.palette))
+            result[ty * targetWidth + tx] = mixAndEnhance(
+                avg, center, detail, detailBoost, saturationBoost, contrastBoost
+            )
         }
-        return CraftGrid(options.targetWidth, options.targetHeight, options.palette, cells)
+        return result
+    }
+
+    /**
+     * Removes isolated one-cell noise while keeping real edges. A neighbour contributes only
+     * when it is perceptually close to the center cell, so facial outlines and object borders stay sharp.
+     */
+    private fun edgePreservingCleanup(src: IntArray, width: Int, height: Int): IntArray {
+        if (width < 3 || height < 3) return src
+        var current = src
+        repeat(2) {
+            val out = current.copyOf()
+            for (y in 1 until height - 1) for (x in 1 until width - 1) {
+                val center = current[y * width + x]
+                var sr = (center shr 16 and 255) * 3.0
+                var sg = (center shr 8 and 255) * 3.0
+                var sb = (center and 255) * 3.0
+                var weight = 3.0
+                for (dy in -1..1) for (dx in -1..1) {
+                    if (dx == 0 && dy == 0) continue
+                    val c = current[(y + dy) * width + (x + dx)]
+                    val d = perceptualRgbDistance(center, c)
+                    if (d < 2200) {
+                        val w = if (dx == 0 || dy == 0) 1.0 else 0.65
+                        sr += (c shr 16 and 255) * w
+                        sg += (c shr 8 and 255) * w
+                        sb += (c and 255) * w
+                        weight += w
+                    }
+                }
+                out[y * width + x] = argb(
+                    (sr / weight).roundToInt().coerceIn(0, 255),
+                    (sg / weight).roundToInt().coerceIn(0, 255),
+                    (sb / weight).roundToInt().coerceIn(0, 255)
+                )
+            }
+            current = out
+        }
+        return current
     }
 
     private fun strongestDetailSample(img: CraftImage, avg: Int, x0: Double, y0: Double, x1: Double, y1: Double): Int {
@@ -62,10 +157,10 @@ object ImageEngine {
             doubleArrayOf((x0 + x1 * 3) / 4.0, (y0 + y1 * 3) / 4.0)
         )
         var best = bilinear(img, points[0][0], points[0][1])
-        var bestD = rgbDistance(avg, best)
+        var bestD = perceptualRgbDistance(avg, best)
         for (i in 1 until points.size) {
             val c = bilinear(img, points[i][0], points[i][1])
-            val d = rgbDistance(avg, c)
+            val d = perceptualRgbDistance(avg, c)
             if (d > bestD) { bestD = d; best = c }
         }
         return best
@@ -102,35 +197,43 @@ object ImageEngine {
         return argb(channel(16), channel(8), channel(0))
     }
 
-    private fun mixAndEnhance(avg: Int, center: Int, detail: Int, o: ImageConversionOptions): Int {
-        val centerWeight = o.detailBoost.coerceIn(0.0, 0.60)
-        val detailWeight = 0.14
+    private fun mixAndEnhance(
+        avg: Int,
+        center: Int,
+        detail: Int,
+        detailBoost: Double,
+        saturationBoost: Double,
+        contrastBoost: Double
+    ): Int {
+        val centerWeight = detailBoost.coerceIn(0.0, 0.50)
+        val detailWeight = 0.08
         var r = weighted(avg shr 16 and 255, center shr 16 and 255, detail shr 16 and 255, centerWeight, detailWeight)
         var g = weighted(avg shr 8 and 255, center shr 8 and 255, detail shr 8 and 255, centerWeight, detailWeight)
         var b = weighted(avg and 255, center and 255, detail and 255, centerWeight, detailWeight)
 
-        r = ((r - 128.0) * o.contrastBoost + 128.0).roundToInt().coerceIn(0, 255)
-        g = ((g - 128.0) * o.contrastBoost + 128.0).roundToInt().coerceIn(0, 255)
-        b = ((b - 128.0) * o.contrastBoost + 128.0).roundToInt().coerceIn(0, 255)
+        r = ((r - 128.0) * contrastBoost + 128.0).roundToInt().coerceIn(0, 255)
+        g = ((g - 128.0) * contrastBoost + 128.0).roundToInt().coerceIn(0, 255)
+        b = ((b - 128.0) * contrastBoost + 128.0).roundToInt().coerceIn(0, 255)
 
         val gray = 0.299 * r + 0.587 * g + 0.114 * b
-        r = (gray + (r - gray) * o.saturationBoost).roundToInt().coerceIn(0, 255)
-        g = (gray + (g - gray) * o.saturationBoost).roundToInt().coerceIn(0, 255)
-        b = (gray + (b - gray) * o.saturationBoost).roundToInt().coerceIn(0, 255)
+        r = (gray + (r - gray) * saturationBoost).roundToInt().coerceIn(0, 255)
+        g = (gray + (g - gray) * saturationBoost).roundToInt().coerceIn(0, 255)
+        b = (gray + (b - gray) * saturationBoost).roundToInt().coerceIn(0, 255)
         return argb(r, g, b)
     }
 
     private fun weighted(a: Int, center: Int, detail: Int, cw: Double, dw: Double): Int {
-        val aw = (1.0 - cw - dw).coerceAtLeast(0.15)
+        val aw = (1.0 - cw - dw).coerceAtLeast(0.35)
         val norm = aw + cw + dw
         return ((a * aw + center * cw + detail * dw) / norm).roundToInt().coerceIn(0, 255)
     }
 
-    private fun rgbDistance(a: Int, b: Int): Int {
-        val dr = (a shr 16 and 255) - (b shr 16 and 255)
-        val dg = (a shr 8 and 255) - (b shr 8 and 255)
-        val db = (a and 255) - (b and 255)
-        return dr * dr + 2 * dg * dg + db * db
+    private fun perceptualRgbDistance(a: Int, b: Int): Int {
+        val r1 = a shr 16 and 255; val g1 = a shr 8 and 255; val b1 = a and 255
+        val r2 = b shr 16 and 255; val g2 = b shr 8 and 255; val b2 = b and 255
+        val rMean = (r1 + r2) / 2
+        val dr = r1 - r2; val dg = g1 - g2; val db = b1 - b2
+        return (((512 + rMean) * dr * dr) shr 8) + 4 * dg * dg + (((767 - rMean) * db * db) shr 8)
     }
 
     private fun argb(r: Int, g: Int, b: Int): Int = (0xFF shl 24) or (r shl 16) or (g shl 8) or b

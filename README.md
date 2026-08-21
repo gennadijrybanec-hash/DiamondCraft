@@ -1,26 +1,16 @@
-# DiamondCraft 1.0 Beta 1
+# DiamondCraft 1.0 beta2
 
-Commercial-beta foundation for Android diamond-painting pattern creation.
+Комплексная тестовая сборка генератора схем алмазной мозаики.
 
-## Included in this build
+Изменения beta2:
+- новый адаптивный Photo Engine: палитра строится по итоговой сетке, а не по исходным пикселям;
+- сопоставление оттенков в Lab-пространстве;
+- частотно-взвешенная палитра, чтобы фон не вытеснял важные оттенки объекта;
+- edge-preserving cleanup уменьшает одиночный цветовой шум, сохраняя границы;
+- «Подготовить список покупок» теперь открывает видимый список с количеством страз, пакетиков и размером основы;
+- список покупок можно скопировать в буфер обмена;
+- CSV и PDF экспорт сохранены;
+- versionCode 101, versionName 1.0-beta2;
+- используется тот же постоянный dev signing key, что beta1, для установки поверх предыдущей версии.
 
-- photo to drill-grid conversion with adaptive photo palette;
-- 30–200 drills wide and 24–120 adaptive colors;
-- zoom/pan and completed-drill progress tracking;
-- local save/restore of multiple projects;
-- square / round drill material estimates;
-- physical picture and adhesive-canvas size;
-- reserve percentage, per-color quantities and 200-piece bag estimates;
-- CSV materials export;
-- PDF materials export;
-- provider-neutral shopping list model ready for store/API adapters;
-- stable development APK signing for in-place updates;
-- version displayed from Android BuildConfig to avoid stale hard-coded labels.
-
-## Test update path
-
-This build uses the same `app/diamondcraft-dev.keystore` introduced in v0.6 and raises `versionCode` to 100. Install the new APK directly over v0.6. Android should offer an update without uninstalling the application. Project data stored by v0.6 will remain if the app is updated in place.
-
-## Google Play
-
-The bundled development keystore is only for internal APK testing. Production Google Play signing / Play App Signing must use a separate release key and release build configuration.
+Тест обновления: НЕ удалять beta1. Установить APK beta2 поверх него — Android должен предложить обновление.

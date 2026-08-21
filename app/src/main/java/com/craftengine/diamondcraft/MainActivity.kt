@@ -4,6 +4,8 @@ import android.content.Context
 import android.graphics.BitmapFactory
 import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -50,6 +52,7 @@ private fun DiamondApp() {
     var drillShape by remember { mutableStateOf(DrillShape.SQUARE) }
     var status by remember { mutableStateOf("Выберите фотографию") }
     var savedRefresh by remember { mutableIntStateOf(0) }
+    var shoppingListText by remember { mutableStateOf<String?>(null) }
 
     val savedProjects = remember(savedRefresh) { listSavedProjects(context) }
 
@@ -90,17 +93,14 @@ private fun DiamondApp() {
             val source = CraftImage(bmp.width, bmp.height, pixels)
 
             status = "Анализируем фотографию…"
-            val palette = PaletteEngine.adaptivePalette(source, colorCount.toInt())
-            val grid = ImageEngine.toGrid(
-                source,
-                ImageConversionOptions(
-                    targetWidth = targetW,
-                    targetHeight = targetH,
-                    palette = palette,
-                    detailBoost = 0.48,
-                    saturationBoost = 1.18,
-                    contrastBoost = 1.14
-                )
+            val grid = ImageEngine.toAdaptiveGrid(
+                image = source,
+                targetWidth = targetW,
+                targetHeight = targetH,
+                requestedColors = colorCount.toInt(),
+                detailBoost = 0.34,
+                saturationBoost = 1.10,
+                contrastBoost = 1.08
             )
             project = CraftProject(
                 id = UUID.randomUUID().toString(),
@@ -109,8 +109,31 @@ private fun DiamondApp() {
                 grid = grid,
                 updatedAt = System.currentTimeMillis()
             )
-            status = "Схема создана: ${grid.width} × ${grid.height} • ${palette.size} цветов"
+            status = "Схема создана: ${grid.width} × ${grid.height} • ${grid.palette.size} цветов"
         }.onFailure { status = "Не удалось открыть изображение" }
+    }
+
+    shoppingListText?.let { text ->
+        AlertDialog(
+            onDismissRequest = { shoppingListText = null },
+            title = { Text("Список покупок") },
+            text = {
+                Box(Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState())) {
+                    Text(text)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText("DiamondCraft — список покупок", text))
+                    status = "Список покупок скопирован"
+                    shoppingListText = null
+                }) { Text("Копировать") }
+            },
+            dismissButton = {
+                TextButton(onClick = { shoppingListText = null }) { Text("Закрыть") }
+            }
+        )
     }
 
     Scaffold(
@@ -245,10 +268,7 @@ private fun DiamondApp() {
                 }
 
                 Button(
-                    onClick = {
-                        val items = DiamondShoppingModel.from(estimate)
-                        status = "Список покупок готов: ${items.size} позиций. Подключение магазинов — следующий этап."
-                    },
+                    onClick = { shoppingListText = buildShoppingList(p, estimate) },
                     modifier = Modifier.fillMaxWidth()
                 ) { Text("Подготовить список покупок") }
 
@@ -284,6 +304,23 @@ private fun listSavedProjects(context: Context): List<SavedProjectInfo> {
         ?.mapNotNull { file -> runCatching { SavedProjectInfo(file, ProjectCodec.decode(file.readText())) }.getOrNull() }
         ?.sortedByDescending { it.project.updatedAt }
         .orEmpty()
+}
+
+private fun buildShoppingList(project: CraftProject, estimate: DiamondMaterialEstimate): String = buildString {
+    appendLine("DiamondCraft — список покупок")
+    appendLine("Проект: ${project.name}")
+    appendLine("Картина: ${cm(estimate.pictureWidthCm)} × ${cm(estimate.pictureHeightCm)} см")
+    appendLine("Клеевая основа: ${cm(estimate.canvasWidthCm)} × ${cm(estimate.canvasHeightCm)} см")
+    appendLine("Стразы: ${estimate.drillShape.displayName.lowercase()}")
+    appendLine("Запас: ${estimate.reservePercent}%")
+    appendLine("Всего купить: ${estimate.totalRequiredDrills} шт. (~${estimate.totalBags} пак. по 200 шт.)")
+    appendLine()
+    appendLine("По цветам:")
+    estimate.colors.forEachIndexed { index, item ->
+        appendLine("${index + 1}. ${item.color.id}: ${item.requiredCount} шт. (${item.bags} пак.)")
+    }
+    appendLine()
+    appendLine("Дополнительно: клеевая основа, лоток, стилус, воск/клей.")
 }
 
 private fun materialsCsv(project: CraftProject, estimate: DiamondMaterialEstimate): String = buildString {
