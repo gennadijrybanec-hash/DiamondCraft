@@ -8,6 +8,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -44,6 +45,7 @@ import kotlin.math.ceil
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         setContent { DiamondCraftTheme { DiamondApp() } }
     }
@@ -53,17 +55,24 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun DiamondCraftTheme(content: @Composable () -> Unit) {
-    val scheme = lightColorScheme(
-        primary = Color(0xFF6C4BD3),
-        onPrimary = Color.White,
-        primaryContainer = Color(0xFFE9E1FF),
-        onPrimaryContainer = Color(0xFF251052),
-        secondary = Color(0xFF665A7A),
-        secondaryContainer = Color(0xFFEDE1F7),
-        tertiary = Color(0xFF006A6A),
-        background = Color(0xFFFFFBFF),
-        surface = Color(0xFFFFFBFF),
-        surfaceVariant = Color(0xFFE8E0EB)
+    val scheme = darkColorScheme(
+        primary = Color(0xFFBF7BFF),
+        onPrimary = Color(0xFF26004A),
+        primaryContainer = Color(0xFF51227D),
+        onPrimaryContainer = Color(0xFFF2DCFF),
+        secondary = Color(0xFFFF65C7),
+        onSecondary = Color(0xFF4B0037),
+        secondaryContainer = Color(0xFF6B1855),
+        onSecondaryContainer = Color(0xFFFFD8EE),
+        tertiary = Color(0xFF62D9FF),
+        onTertiary = Color(0xFF003544),
+        background = Color(0xFF0D0B14),
+        onBackground = Color(0xFFF1ECF7),
+        surface = Color(0xFF15121E),
+        onSurface = Color(0xFFF1ECF7),
+        surfaceVariant = Color(0xFF262130),
+        onSurfaceVariant = Color(0xFFD0C5D8),
+        outline = Color(0xFF958A9D)
     )
     MaterialTheme(colorScheme = scheme, content = content)
 }
@@ -319,20 +328,22 @@ private fun DiamondApp() {
     if (showAboutDialog) {
         AlertDialog(
             onDismissRequest = { showAboutDialog = false },
-            title = { Text("О DiamondCraft") },
+            title = { Text("💎  DiamondCraft") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("DiamondCraft ${BuildConfig.VERSION_NAME}")
-                    Text("Создание схем алмазной мозаики из фотографий.")
+                    Text("DiamondCraft ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                    Text("Превращайте любимые фотографии в красивые схемы алмазной мозаики.")
                     HorizontalDivider()
                     Text("Возможности:")
                     Text("• фото → схема")
-                    Text("• профили обработки и цветопередачи")
+                    Text("• интеллектуальная обработка и цветопередача")
+                    Text("• квадратные и круглые стразы")
                     Text("• масштабирование и отметка прогресса")
                     Text("• сохранение и перенос проектов")
                     Text("• PNG, PDF и CSV")
-                    Text("• расчёт страз и основы")
+                    Text("• расчёт страз, запаса и основы")
                     Text("• список покупок")
+                    Text("• Undo / Redo и удобное управление проектами")
                     HorizontalDivider()
                     Text(
                         "Фотографии и проекты обрабатываются локально на устройстве. " +
@@ -407,7 +418,7 @@ private fun DiamondApp() {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("💎 DiamondCraft") },
+                title = { Text("DiamondCraft", color = MaterialTheme.colorScheme.primary) },
                 actions = {
                     TextButton(onClick = { showProDialog = true }) {
                         Text(if (isPro) "PRO ✓" else "PRO")
@@ -427,9 +438,9 @@ private fun DiamondApp() {
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Text("Фото → схема алмазной мозаики", style = MaterialTheme.typography.titleMedium)
+            Text("💎  Фото → схема алмазной мозаики", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
             Text(
-                if (isPro) "DiamondCraft Pro • тестовый RC-доступ" else "Бесплатный режим • до ${CommercialLimits.FREE_MAX_WIDTH} страз / ${CommercialLimits.FREE_MAX_COLORS} цветов",
+                if (isPro) "DiamondCraft Pro • RC12" else "Бесплатный режим • до ${CommercialLimits.FREE_MAX_WIDTH} страз / ${CommercialLimits.FREE_MAX_COLORS} цветов",
                 style = MaterialTheme.typography.bodySmall
             )
 

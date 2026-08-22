@@ -12,8 +12,8 @@ android {
         applicationId = "com.craftengine.diamondcraft"
         minSdk = 26
         targetSdk = 36
-        versionCode = 160
-        versionName = "1.0-rc11"
+        versionCode = 170
+        versionName = "1.0-rc12"
     }
 
     signingConfigs {
@@ -62,6 +62,7 @@ android {
 dependencies {
     implementation(project(":core"))
     implementation("androidx.activity:activity-compose:1.10.1")
+    implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.compose.material3:material3:1.3.2")
     implementation("androidx.compose.ui:ui:1.7.8")
     implementation("androidx.compose.ui:ui-tooling-preview:1.7.8")
