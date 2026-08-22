@@ -15,7 +15,7 @@
 
 После добавления секретов GitHub Actions автоматически соберёт артефакт:
 
-`DiamondCraft-release-aab-signed`
+`DiamondCraft-google-play-aab`
 
 Именно подписанный AAB затем используется для загрузки в Play Console.
 

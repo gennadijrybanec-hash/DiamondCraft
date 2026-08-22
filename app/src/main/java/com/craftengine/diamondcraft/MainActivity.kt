@@ -1,6 +1,7 @@
 package com.craftengine.diamondcraft
 
 import android.content.Context
+import android.app.Activity
 import android.graphics.BitmapFactory
 import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
@@ -113,9 +114,9 @@ private fun DiamondApp() {
     var renameText by remember { mutableStateOf("") }
     val undoStack = remember { mutableStateListOf<CraftGrid>() }
     val redoStack = remember { mutableStateListOf<CraftGrid>() }
-    // RC test build: true keeps all features available while Google Play Billing is not connected yet.
-    // Release build will replace this with the verified Google Play purchase entitlement.
-    val isPro = true
+    // Debug APK stays fully unlocked for our device testing. Release builds use Google Play entitlement.
+    val billing = remember { if (BuildConfig.DEBUG) null else PlayBillingController(context.applicationContext) }
+    val isPro = BuildConfig.DEBUG || (billing?.isPro == true)
 
     val savedProjects = remember(savedRefresh) { listSavedProjects(context) }
     val maxWidth = if (isPro) CommercialLimits.PRO_MAX_WIDTH else CommercialLimits.FREE_MAX_WIDTH
@@ -314,13 +315,28 @@ private fun DiamondApp() {
                     Text("• будущий подбор расходников по каталогам")
                     HorizontalDivider()
                     Text(
-                        "RC13 работает в тестовом Pro-режиме. Перед релизом этот флаг будет заменён реальным статусом покупки из Google Play Billing.",
+                        if (BuildConfig.DEBUG)
+                            "Тестовая APK-сборка: Pro открыт для проверки всех функций."
+                        else
+                            (billing?.status ?: "Google Play Billing недоступен"),
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showProDialog = false }) { Text("Понятно") }
+                if (isPro) {
+                    TextButton(onClick = { showProDialog = false }) { Text("Понятно") }
+                } else {
+                    TextButton(onClick = {
+                        val activity = context as? Activity
+                        if (activity != null) billing?.launchPurchase(activity)
+                    }) { Text("Получить Pro") }
+                }
+            },
+            dismissButton = {
+                if (!BuildConfig.DEBUG && !isPro) {
+                    TextButton(onClick = { billing?.refresh() }) { Text("Восстановить покупку") }
+                }
             }
         )
     }
@@ -440,7 +456,7 @@ private fun DiamondApp() {
         ) {
             Text("💎  Фото → схема алмазной мозаики", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
             Text(
-                if (isPro) "DiamondCraft Pro • RC13" else "Бесплатный режим • до ${CommercialLimits.FREE_MAX_WIDTH} страз / ${CommercialLimits.FREE_MAX_COLORS} цветов",
+                if (isPro) "DiamondCraft Pro • RC14" else "Бесплатный режим • до ${CommercialLimits.FREE_MAX_WIDTH} страз / ${CommercialLimits.FREE_MAX_COLORS} цветов",
                 style = MaterialTheme.typography.bodySmall
             )
 
