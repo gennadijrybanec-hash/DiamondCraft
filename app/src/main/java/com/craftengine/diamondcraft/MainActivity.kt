@@ -56,23 +56,23 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun DiamondCraftTheme(content: @Composable () -> Unit) {
     val scheme = darkColorScheme(
-        primary = Color(0xFFBF7BFF),
+        primary = Color(0xFFB97AF2),
         onPrimary = Color(0xFF26004A),
-        primaryContainer = Color(0xFF51227D),
+        primaryContainer = Color(0xFF55326F),
         onPrimaryContainer = Color(0xFFF2DCFF),
-        secondary = Color(0xFFFF65C7),
+        secondary = Color(0xFFE875BD),
         onSecondary = Color(0xFF4B0037),
-        secondaryContainer = Color(0xFF6B1855),
+        secondaryContainer = Color(0xFF663052),
         onSecondaryContainer = Color(0xFFFFD8EE),
-        tertiary = Color(0xFF62D9FF),
+        tertiary = Color(0xFF74CDE8),
         onTertiary = Color(0xFF003544),
-        background = Color(0xFF0D0B14),
-        onBackground = Color(0xFFF1ECF7),
-        surface = Color(0xFF15121E),
-        onSurface = Color(0xFFF1ECF7),
-        surfaceVariant = Color(0xFF262130),
-        onSurfaceVariant = Color(0xFFD0C5D8),
-        outline = Color(0xFF958A9D)
+        background = Color(0xFF24212B),
+        onBackground = Color(0xFFF3EFF5),
+        surface = Color(0xFF2D2934),
+        onSurface = Color(0xFFF3EFF5),
+        surfaceVariant = Color(0xFF3A3442),
+        onSurfaceVariant = Color(0xFFD8CFDC),
+        outline = Color(0xFFA89EAD)
     )
     MaterialTheme(colorScheme = scheme, content = content)
 }
@@ -314,7 +314,7 @@ private fun DiamondApp() {
                     Text("• будущий подбор расходников по каталогам")
                     HorizontalDivider()
                     Text(
-                        "RC11 работает в тестовом Pro-режиме. Перед релизом этот флаг будет заменён реальным статусом покупки из Google Play Billing.",
+                        "RC13 работает в тестовом Pro-режиме. Перед релизом этот флаг будет заменён реальным статусом покупки из Google Play Billing.",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
@@ -440,7 +440,7 @@ private fun DiamondApp() {
         ) {
             Text("💎  Фото → схема алмазной мозаики", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
             Text(
-                if (isPro) "DiamondCraft Pro • RC12" else "Бесплатный режим • до ${CommercialLimits.FREE_MAX_WIDTH} страз / ${CommercialLimits.FREE_MAX_COLORS} цветов",
+                if (isPro) "DiamondCraft Pro • RC13" else "Бесплатный режим • до ${CommercialLimits.FREE_MAX_WIDTH} страз / ${CommercialLimits.FREE_MAX_COLORS} цветов",
                 style = MaterialTheme.typography.bodySmall
             )
 
