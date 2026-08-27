@@ -1,4 +1,4 @@
-name: Build DiamondCraft APK
+name: Build DiamondCraft Android
 
 on:
   workflow_dispatch:
@@ -21,7 +21,7 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      - name: Setup Gradle
+      - name: Setup Gradle 8.13
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
@@ -29,8 +29,42 @@ jobs:
       - name: Build Debug APK
         run: gradle assembleDebug
 
-      - name: Upload APK
+      - name: Prepare Google Play upload key
+        shell: bash
+        env:
+          UPLOAD_KEYSTORE_B64: ${{ secrets.DIAMONDCRAFT_UPLOAD_KEYSTORE_B64 }}
+        run: |
+          test -n "$UPLOAD_KEYSTORE_B64" || { echo "Missing DIAMONDCRAFT_UPLOAD_KEYSTORE_B64 secret"; exit 1; }
+          printf '%s' "$UPLOAD_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/diamondcraft-upload.jks"
+
+      - name: Verify Google Play upload key
+        shell: bash
+        env:
+          DIAMONDCRAFT_KEYSTORE_PASSWORD: ${{ secrets.DIAMONDCRAFT_KEYSTORE_PASSWORD }}
+          DIAMONDCRAFT_KEY_ALIAS: ${{ secrets.DIAMONDCRAFT_KEY_ALIAS }}
+        run: |
+          keytool -list \
+            -keystore "$RUNNER_TEMP/diamondcraft-upload.jks" \
+            -storepass "$DIAMONDCRAFT_KEYSTORE_PASSWORD" \
+            -alias "$DIAMONDCRAFT_KEY_ALIAS"
+
+      - name: Build signed Google Play AAB
+        env:
+          DIAMONDCRAFT_KEYSTORE_PATH: ${{ runner.temp }}/diamondcraft-upload.jks
+          DIAMONDCRAFT_KEYSTORE_PASSWORD: ${{ secrets.DIAMONDCRAFT_KEYSTORE_PASSWORD }}
+          DIAMONDCRAFT_KEY_ALIAS: ${{ secrets.DIAMONDCRAFT_KEY_ALIAS }}
+          DIAMONDCRAFT_KEY_PASSWORD: ${{ secrets.DIAMONDCRAFT_KEY_PASSWORD }}
+        run: gradle bundleRelease
+
+      - name: Collect APK and AAB
+        shell: bash
+        run: |
+          mkdir -p release-files
+          cp app/build/outputs/apk/debug/*.apk release-files/DiamondCraft-RC14-debug.apk
+          cp app/build/outputs/bundle/release/*.aab release-files/DiamondCraft-1.0-RC14-google-play.aab
+
+      - name: Upload APK and signed AAB
         uses: actions/upload-artifact@v4
         with:
-          name: DiamondCraft-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          name: DiamondCraft-RC14-APK-and-GooglePlay-AAB
+          path: release-files/*
