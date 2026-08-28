@@ -16,13 +16,9 @@ import com.android.billingclient.api.Purchase
 import com.android.billingclient.api.PurchasesUpdatedListener
 import com.android.billingclient.api.QueryProductDetailsParams
 import com.android.billingclient.api.QueryPurchasesParams
+import com.android.billingclient.api.UnfetchedProduct
 
-/**
- * Google Play Billing entitlement for the one-time DiamondCraft Pro purchase.
- *
- * Debug APKs deliberately don't depend on this class for entitlement so device testing
- * stays fully unlocked. Release builds use the verified Play purchase state.
- */
+/** Google Play Billing entitlement for the one-time DiamondCraft Pro purchase. */
 class PlayBillingController(context: Context) : PurchasesUpdatedListener {
 
     companion object {
@@ -39,14 +35,17 @@ class PlayBillingController(context: Context) : PurchasesUpdatedListener {
         private set
 
     private var productDetails: ProductDetails? = null
+    private var purchaseActivity: Activity? = null
+    private var purchaseRequested = false
 
-    private val billingClient = BillingClient.newBuilder(context)
+    private val billingClient = BillingClient.newBuilder(context.applicationContext)
         .setListener(this)
         .enablePendingPurchases(
             PendingPurchasesParams.newBuilder()
                 .enableOneTimeProducts()
                 .build()
         )
+        .enableAutoServiceReconnection()
         .build()
 
     init {
@@ -56,29 +55,37 @@ class PlayBillingController(context: Context) : PurchasesUpdatedListener {
     private fun connect() {
         if (billingClient.isReady) {
             isReady = true
+            queryProduct()
             refresh()
             return
         }
+        status = "Подключение к Google Play…"
         billingClient.startConnection(object : BillingClientStateListener {
             override fun onBillingSetupFinished(result: BillingResult) {
                 if (result.responseCode == BillingClient.BillingResponseCode.OK) {
                     isReady = true
-                    status = "Google Play подключён"
+                    status = "Google Play подключён. Получаем товар…"
                     queryProduct()
                     refresh()
                 } else {
-                    status = "Google Play Billing недоступен: ${result.debugMessage}"
+                    isReady = false
+                    status = billingError("Google Play Billing недоступен", result)
                 }
             }
 
             override fun onBillingServiceDisconnected() {
                 isReady = false
-                status = "Связь с Google Play временно потеряна"
+                status = "Связь с Google Play временно потеряна. Нажмите «Получить Pro» ещё раз."
             }
         })
     }
 
     private fun queryProduct() {
+        if (!billingClient.isReady) {
+            connect()
+            return
+        }
+
         val product = QueryProductDetailsParams.Product.newBuilder()
             .setProductId(PRO_PRODUCT_ID)
             .setProductType(BillingClient.ProductType.INAPP)
@@ -88,14 +95,69 @@ class PlayBillingController(context: Context) : PurchasesUpdatedListener {
             .build()
 
         billingClient.queryProductDetailsAsync(params) { result, detailsResult ->
-            if (result.responseCode == BillingClient.BillingResponseCode.OK) {
-                productDetails = detailsResult.productDetailsList.firstOrNull()
-                if (productDetails == null && !isPro) {
-                    status = "Pro станет доступен после настройки товара в Google Play"
-                }
-            } else {
-                status = "Не удалось получить данные DiamondCraft Pro"
+            if (result.responseCode != BillingClient.BillingResponseCode.OK) {
+                productDetails = null
+                status = billingError("Не удалось получить DiamondCraft Pro", result)
+                clearPendingPurchase()
+                return@queryProductDetailsAsync
             }
+
+            val details = detailsResult.productDetailsList.firstOrNull { it.productId == PRO_PRODUCT_ID }
+            val offer = details?.oneTimePurchaseOfferDetailsList?.firstOrNull()
+                ?: details?.oneTimePurchaseOfferDetails
+
+            if (details == null) {
+                productDetails = null
+                val unfetched = detailsResult.unfetchedProductList.firstOrNull { it.productId == PRO_PRODUCT_ID }
+                status = unfetchedStatus(unfetched)
+                clearPendingPurchase()
+                return@queryProductDetailsAsync
+            }
+
+            if (offer == null || offer.offerToken.isBlank()) {
+                productDetails = null
+                status = "Товар найден, но Google Play не вернул доступный способ покупки. Проверьте активность buy-pro-lifetime и страны тестового аккаунта."
+                clearPendingPurchase()
+                return@queryProductDetailsAsync
+            }
+
+            productDetails = details
+            status = "DiamondCraft Pro доступен: ${offer.formattedPrice}"
+
+            if (purchaseRequested) {
+                val activity = purchaseActivity
+                purchaseRequested = false
+                purchaseActivity = null
+                if (activity != null && !activity.isFinishing && !activity.isDestroyed) {
+                    activity.runOnUiThread { launchWithDetails(activity, details, offer.offerToken) }
+                } else {
+                    status = "Не удалось открыть окно покупки: экран приложения уже закрыт."
+                }
+            }
+        }
+    }
+
+    /** Always refreshes ProductDetails before launching so a newly activated Play product is picked up. */
+    fun launchPurchase(activity: Activity) {
+        purchaseActivity = activity
+        purchaseRequested = true
+        status = "Получаем актуальную цену Google Play…"
+        if (!billingClient.isReady) connect() else queryProduct()
+    }
+
+    private fun launchWithDetails(activity: Activity, details: ProductDetails, offerToken: String) {
+        val productParams = BillingFlowParams.ProductDetailsParams.newBuilder()
+            .setProductDetails(details)
+            .setOfferToken(offerToken)
+            .build()
+
+        val flowParams = BillingFlowParams.newBuilder()
+            .setProductDetailsParamsList(listOf(productParams))
+            .build()
+
+        val result = billingClient.launchBillingFlow(activity, flowParams)
+        if (result.responseCode != BillingClient.BillingResponseCode.OK) {
+            status = billingError("Не удалось открыть покупку", result)
         }
     }
 
@@ -104,52 +166,26 @@ class PlayBillingController(context: Context) : PurchasesUpdatedListener {
             connect()
             return
         }
+        status = if (productDetails == null) "Проверяем покупки и товар…" else status
         val params = QueryPurchasesParams.newBuilder()
             .setProductType(BillingClient.ProductType.INAPP)
             .build()
         billingClient.queryPurchasesAsync(params) { result, purchases ->
             if (result.responseCode == BillingClient.BillingResponseCode.OK) {
                 processPurchases(purchases)
+                if (productDetails == null) queryProduct()
             } else {
-                status = "Не удалось восстановить покупки"
+                status = billingError("Не удалось восстановить покупки", result)
             }
         }
-    }
-
-    fun launchPurchase(activity: Activity): Boolean {
-        val details = productDetails
-        if (!billingClient.isReady || details == null) {
-            status = "Покупка пока недоступна. Проверьте Google Play и повторите."
-            if (!billingClient.isReady) connect() else queryProduct()
-            return false
-        }
-
-        val offerToken = details.oneTimePurchaseOfferDetailsList
-            ?.firstOrNull()
-            ?.offerToken
-
-        val productParamsBuilder = BillingFlowParams.ProductDetailsParams.newBuilder()
-            .setProductDetails(details)
-        if (!offerToken.isNullOrBlank()) {
-            productParamsBuilder.setOfferToken(offerToken)
-        }
-
-        val flowParams = BillingFlowParams.newBuilder()
-            .setProductDetailsParamsList(listOf(productParamsBuilder.build()))
-            .build()
-        val result = billingClient.launchBillingFlow(activity, flowParams)
-        if (result.responseCode != BillingClient.BillingResponseCode.OK) {
-            status = result.debugMessage.ifBlank { "Не удалось открыть покупку" }
-            return false
-        }
-        return true
     }
 
     override fun onPurchasesUpdated(result: BillingResult, purchases: MutableList<Purchase>?) {
         when (result.responseCode) {
             BillingClient.BillingResponseCode.OK -> processPurchases(purchases.orEmpty())
             BillingClient.BillingResponseCode.USER_CANCELED -> status = "Покупка отменена"
-            else -> status = result.debugMessage.ifBlank { "Ошибка Google Play Billing" }
+            BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED -> refresh()
+            else -> status = billingError("Ошибка Google Play Billing", result)
         }
     }
 
@@ -161,7 +197,11 @@ class PlayBillingController(context: Context) : PurchasesUpdatedListener {
 
         isPro = proPurchase != null
         if (proPurchase == null) {
-            status = "Бесплатный режим"
+            if (productDetails != null) {
+                val offer = productDetails?.oneTimePurchaseOfferDetailsList?.firstOrNull()
+                    ?: productDetails?.oneTimePurchaseOfferDetails
+                status = if (offer != null) "DiamondCraft Pro доступен: ${offer.formattedPrice}" else "Бесплатный режим"
+            }
             return
         }
 
@@ -172,9 +212,34 @@ class PlayBillingController(context: Context) : PurchasesUpdatedListener {
                 .build()
             billingClient.acknowledgePurchase(params) { result ->
                 if (result.responseCode != BillingClient.BillingResponseCode.OK) {
-                    status = "Pro активирован; подтверждение покупки будет повторено"
+                    status = billingError("Pro активирован; подтверждение покупки будет повторено", result)
                 }
             }
         }
+    }
+
+    private fun clearPendingPurchase() {
+        purchaseRequested = false
+        purchaseActivity = null
+    }
+
+    private fun unfetchedStatus(unfetched: UnfetchedProduct?): String {
+        if (unfetched == null) {
+            return "Google Play не вернул товар $PRO_PRODUCT_ID. Проверьте тестовый аккаунт и публикацию сборки."
+        }
+        return when (unfetched.statusCode) {
+            UnfetchedProduct.StatusCode.PRODUCT_NOT_FOUND ->
+                "Google Play не видит товар $PRO_PRODUCT_ID (PRODUCT_NOT_FOUND)."
+            UnfetchedProduct.StatusCode.NO_ELIGIBLE_OFFER ->
+                "Товар найден, но для этого аккаунта/страны нет доступного предложения (NO_ELIGIBLE_OFFER)."
+            UnfetchedProduct.StatusCode.INVALID_PRODUCT_ID_FORMAT ->
+                "Google Play отклонил ID товара $PRO_PRODUCT_ID (INVALID_PRODUCT_ID_FORMAT)."
+            else -> "Google Play не смог получить товар $PRO_PRODUCT_ID (код ${unfetched.statusCode})."
+        }
+    }
+
+    private fun billingError(prefix: String, result: BillingResult): String {
+        val message = result.debugMessage.ifBlank { "без описания" }
+        return "$prefix: код ${result.responseCode}, $message"
     }
 }

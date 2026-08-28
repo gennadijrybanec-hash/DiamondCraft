@@ -1,6 +1,7 @@
 package com.craftengine.diamondcraft
 
 import android.content.Context
+import android.content.ContextWrapper
 import android.app.Activity
 import android.graphics.BitmapFactory
 import android.graphics.Paint
@@ -53,6 +54,11 @@ class MainActivity : ComponentActivity() {
 }
 
 
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
 
 @Composable
 private fun DiamondCraftTheme(content: @Composable () -> Unit) {
@@ -328,8 +334,12 @@ private fun DiamondApp() {
                     TextButton(onClick = { showProDialog = false }) { Text("Понятно") }
                 } else {
                     TextButton(onClick = {
-                        val activity = context as? Activity
-                        if (activity != null) billing?.launchPurchase(activity)
+                        val activity = context.findActivity()
+                        if (activity != null) {
+                            billing?.launchPurchase(activity)
+                        } else {
+                            status = "Не удалось открыть окно Google Play: Activity не найдена"
+                        }
                     }) { Text("Получить Pro") }
                 }
             },
