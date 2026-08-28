@@ -114,9 +114,19 @@ class PlayBillingController(context: Context) : PurchasesUpdatedListener {
                 return@queryProductDetailsAsync
             }
 
-            if (offer == null || offer.offerToken.isBlank()) {
+            if (offer == null) {
                 productDetails = null
                 status = "Товар найден, но Google Play не вернул доступный способ покупки. Проверьте активность buy-pro-lifetime и страны тестового аккаунта."
+                clearPendingPurchase()
+                return@queryProductDetailsAsync
+            }
+
+            // Billing 9 exposes offerToken as nullable. Read it once into a local value so
+            // Kotlin can safely pass a non-null String to BillingFlowParams.
+            val offerToken = offer.offerToken
+            if (offerToken.isNullOrBlank()) {
+                productDetails = null
+                status = "Товар найден, но Google Play не вернул offerToken для покупки. Проверьте активность buy-pro-lifetime и страны тестового аккаунта."
                 clearPendingPurchase()
                 return@queryProductDetailsAsync
             }
@@ -129,7 +139,7 @@ class PlayBillingController(context: Context) : PurchasesUpdatedListener {
                 purchaseRequested = false
                 purchaseActivity = null
                 if (activity != null && !activity.isFinishing && !activity.isDestroyed) {
-                    activity.runOnUiThread { launchWithDetails(activity, details, offer.offerToken) }
+                    activity.runOnUiThread { launchWithDetails(activity, details, offerToken) }
                 } else {
                     status = "Не удалось открыть окно покупки: экран приложения уже закрыт."
                 }
