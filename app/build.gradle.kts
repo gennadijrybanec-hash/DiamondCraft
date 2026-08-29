@@ -12,8 +12,8 @@ android {
         applicationId = "com.craftengine.diamondcraft"
         minSdk = 26
         targetSdk = 36
-        versionCode = 191
-        versionName = "1.0-rc15.1"
+        versionCode = 192
+        versionName = "1.0-rc15.2"
     }
 
     signingConfigs {

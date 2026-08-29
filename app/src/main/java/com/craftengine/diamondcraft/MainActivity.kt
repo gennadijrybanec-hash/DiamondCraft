@@ -34,8 +34,10 @@ import androidx.compose.foundation.Image
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.craftengine.core.*
 import java.io.File
 import java.util.Locale
@@ -62,6 +64,8 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
 
 @Composable
 private fun DiamondCraftTheme(content: @Composable () -> Unit) {
+    val screenWidthDp = LocalConfiguration.current.screenWidthDp
+    val compact = screenWidthDp <= 400
     val scheme = darkColorScheme(
         primary = Color(0xFFB97AF2),
         onPrimary = Color(0xFF26004A),
@@ -81,7 +85,23 @@ private fun DiamondCraftTheme(content: @Composable () -> Unit) {
         onSurfaceVariant = Color(0xFFD8CFDC),
         outline = Color(0xFFA89EAD)
     )
-    MaterialTheme(colorScheme = scheme, content = content)
+    val baseTypography = Typography()
+    val typography = if (compact) {
+        Typography(
+            bodyLarge = baseTypography.bodyLarge.copy(fontSize = 14.sp, lineHeight = 20.sp),
+            bodyMedium = baseTypography.bodyMedium.copy(fontSize = 13.sp, lineHeight = 18.sp),
+            bodySmall = baseTypography.bodySmall.copy(fontSize = 11.sp, lineHeight = 16.sp),
+            titleLarge = baseTypography.titleLarge.copy(fontSize = 18.sp, lineHeight = 24.sp),
+            titleMedium = baseTypography.titleMedium.copy(fontSize = 16.sp, lineHeight = 22.sp),
+            titleSmall = baseTypography.titleSmall.copy(fontSize = 14.sp, lineHeight = 20.sp),
+            labelLarge = baseTypography.labelLarge.copy(fontSize = 12.sp, lineHeight = 16.sp),
+            labelMedium = baseTypography.labelMedium.copy(fontSize = 11.sp, lineHeight = 15.sp),
+            labelSmall = baseTypography.labelSmall.copy(fontSize = 10.sp, lineHeight = 14.sp)
+        )
+    } else {
+        baseTypography
+    }
+    MaterialTheme(colorScheme = scheme, typography = typography, content = content)
 }
 
 private data class SavedProjectInfo(val file: File, val project: CraftProject)
@@ -260,7 +280,7 @@ private fun DiamondApp() {
     if (showNewProjectConfirm) {
         AlertDialog(
             onDismissRequest = { showNewProjectConfirm = false },
-            title = { Text("Новый проект") },
+            title = { Text("Новый проект", maxLines = 1) },
             text = { Text("Очистить текущую схему и выбрать новую фотографию? Несохранённые отметки текущего проекта будут потеряны.") },
             confirmButton = {
                 TextButton(onClick = {
@@ -283,7 +303,7 @@ private fun DiamondApp() {
         AlertDialog(
             onDismissRequest = { deleteCandidate = null },
             title = { Text("Удалить сохранённый проект?") },
-            text = { Text("${saved.project.name} • ${saved.project.grid.width}×${saved.project.grid.height}") },
+            text = { Text("${saved.project.name} • ${saved.project.grid.width}×${saved.project.grid.height}", maxLines = 2) },
             confirmButton = {
                 TextButton(onClick = {
                     if (saved.file.delete()) {
@@ -293,7 +313,7 @@ private fun DiamondApp() {
                         status = "Не удалось удалить проект"
                     }
                     deleteCandidate = null
-                }) { Text("Удалить") }
+                }) { Text("Удалить", maxLines = 1) }
             },
             dismissButton = {
                 TextButton(onClick = { deleteCandidate = null }) { Text("Отмена") }
@@ -406,7 +426,7 @@ private fun DiamondApp() {
                     savedRefresh++
                     status = "Проект сохранён: $name"
                     showSaveAsDialog = false
-                }) { Text("Сохранить") }
+                }) { Text("Сохранить", maxLines = 1) }
             },
             dismissButton = { TextButton(onClick = { showSaveAsDialog = false }) { Text("Отмена") } }
         )
@@ -441,16 +461,26 @@ private fun DiamondApp() {
         )
     }
 
+    val compactUi = LocalConfiguration.current.screenWidthDp <= 400
+    val screenPadding = if (compactUi) 8.dp else 12.dp
+    val contentSpacing = if (compactUi) 8.dp else 10.dp
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("DiamondCraft", color = MaterialTheme.colorScheme.primary) },
+                title = {
+                    Text(
+                        "DiamondCraft",
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1
+                    )
+                },
                 actions = {
                     TextButton(onClick = { showProDialog = true }) {
-                        Text(if (isPro) "PRO ✓" else "PRO")
+                        Text(if (isPro) "PRO ✓" else "PRO", maxLines = 1)
                     }
                     TextButton(onClick = { showAboutDialog = true }) {
-                        Text("О приложении")
+                        Text("О приложении", maxLines = 1)
                     }
                 }
             )
@@ -459,10 +489,10 @@ private fun DiamondApp() {
         Column(
             Modifier
                 .padding(pad)
-                .padding(12.dp)
+                .padding(screenPadding)
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(contentSpacing)
         ) {
             Text("💎  Фото → схема алмазной мозаики", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
             Text(
@@ -485,7 +515,7 @@ private fun DiamondApp() {
                         selected = imageProfile == profile,
                         onClick = { imageProfile = profile },
                         shape = SegmentedButtonDefaults.itemShape(index, ImageProfile.entries.size)
-                    ) { Text(profile.displayName) }
+                    ) { Text(profile.displayName, maxLines = 1) }
                 }
             }
 
@@ -496,7 +526,7 @@ private fun DiamondApp() {
                         selected = colorStyle == style,
                         onClick = { colorStyle = style },
                         shape = SegmentedButtonDefaults.itemShape(index, ColorStyle.entries.size)
-                    ) { Text(style.displayName) }
+                    ) { Text(style.displayName, maxLines = 1) }
                 }
             }
             Text(
@@ -559,10 +589,10 @@ private fun DiamondApp() {
                             },
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("${saved.project.name} • ${saved.project.grid.width}×${saved.project.grid.height}")
+                            Text("${saved.project.name} • ${saved.project.grid.width}×${saved.project.grid.height}", maxLines = if (compactUi) 2 else 1)
                         }
-                        TextButton(onClick = { renameCandidate = saved; renameText = saved.project.name }) { Text("Имя") }
-                        TextButton(onClick = { deleteCandidate = saved }) { Text("Удалить") }
+                        TextButton(onClick = { renameCandidate = saved; renameText = saved.project.name }) { Text("Имя", maxLines = 1) }
+                        TextButton(onClick = { deleteCandidate = saved }) { Text("Удалить", maxLines = 1) }
                     }
                 }
             }
@@ -591,7 +621,7 @@ private fun DiamondApp() {
                             }
                         },
                         modifier = Modifier.weight(1f)
-                    ) { Text("Сохранить") }
+                    ) { Text("Сохранить", maxLines = 1) }
                     OutlinedButton(
                         onClick = {
                             undoStack.add(p.grid)
@@ -603,7 +633,7 @@ private fun DiamondApp() {
                             )
                         },
                         modifier = Modifier.weight(1f)
-                    ) { Text("Снять все отметки") }
+                    ) { Text("Снять все отметки", maxLines = 1) }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(
@@ -616,7 +646,7 @@ private fun DiamondApp() {
                         },
                         enabled = undoStack.isNotEmpty(),
                         modifier = Modifier.weight(1f)
-                    ) { Text("↶ Назад") }
+                    ) { Text("↶ Назад", maxLines = 1) }
                     OutlinedButton(
                         onClick = {
                             if (redoStack.isNotEmpty()) {
@@ -627,20 +657,20 @@ private fun DiamondApp() {
                         },
                         enabled = redoStack.isNotEmpty(),
                         modifier = Modifier.weight(1f)
-                    ) { Text("↷ Вперёд") }
+                    ) { Text("↷ Вперёд", maxLines = 1) }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(
                         onClick = { showNewProjectConfirm = true },
                         modifier = Modifier.weight(1f)
-                    ) { Text("Новый проект") }
+                    ) { Text("Новый проект", maxLines = 1) }
                     OutlinedButton(
                         onClick = {
                             if (isPro) projectExportLauncher.launch("DiamondCraft_${p.grid.width}x${p.grid.height}.diamondcraft")
                             else showProDialog = true
                         },
                         modifier = Modifier.weight(1f)
-                    ) { Text("Экспорт проекта") }
+                    ) { Text("Экспорт проекта", maxLines = 1) }
                 }
 
                 if (sourceImage != null) {
@@ -649,12 +679,12 @@ private fun DiamondApp() {
                             selected = !showOriginal,
                             onClick = { showOriginal = false },
                             shape = SegmentedButtonDefaults.itemShape(0, 2)
-                        ) { Text("Схема") }
+                        ) { Text("Схема", maxLines = 1) }
                         SegmentedButton(
                             selected = showOriginal,
                             onClick = { showOriginal = true },
                             shape = SegmentedButtonDefaults.itemShape(1, 2)
-                        ) { Text("Оригинал") }
+                        ) { Text("Оригинал", maxLines = 1) }
                     }
                 }
 
@@ -681,7 +711,7 @@ private fun DiamondApp() {
                             selected = drillShape == shape,
                             onClick = { drillShape = shape },
                             shape = SegmentedButtonDefaults.itemShape(index, DrillShape.entries.size)
-                        ) { Text(shape.displayName) }
+                        ) { Text(shape.displayName, maxLines = 1) }
                     }
                 }
 
@@ -713,14 +743,14 @@ private fun DiamondApp() {
                             else showProDialog = true
                         },
                         modifier = Modifier.weight(1f)
-                    ) { Text(if (isPro) "Схема PNG" else "PNG • PRO") }
+                    ) { Text(if (isPro) "Схема PNG" else "PNG • PRO", maxLines = 1) }
                     OutlinedButton(
                         onClick = {
                             if (isPro) pdfLauncher.launch("DiamondCraft_${p.grid.width}x${p.grid.height}_materials.pdf")
                             else showProDialog = true
                         },
                         modifier = Modifier.weight(1f)
-                    ) { Text(if (isPro) "Расходники PDF" else "PDF • PRO") }
+                    ) { Text(if (isPro) "Расходники PDF" else "PDF • PRO", maxLines = 1) }
                 }
                 OutlinedButton(
                     onClick = {
@@ -728,12 +758,12 @@ private fun DiamondApp() {
                         else showProDialog = true
                     },
                     modifier = Modifier.fillMaxWidth()
-                ) { Text(if (isPro) "Расходники CSV" else "CSV • PRO") }
+                ) { Text(if (isPro) "Расходники CSV" else "CSV • PRO", maxLines = 1) }
 
                 Button(
                     onClick = { shoppingListText = buildShoppingList(p, estimate) },
                     modifier = Modifier.fillMaxWidth()
-                ) { Text("Подготовить список покупок") }
+                ) { Text("Подготовить список покупок", maxLines = 1) }
 
                 Text(
                     "DiamondCraft ${BuildConfig.VERSION_NAME} • Цвета изображения обозначаются HEX. Артикулы поставщиков будут показываться только после подключения проверенного каталога.",
