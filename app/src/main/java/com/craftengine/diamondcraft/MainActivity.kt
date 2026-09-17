@@ -602,6 +602,7 @@ private fun DiamondApp() {
                 title = { Text("DiamondCraft", color = MaterialTheme.colorScheme.primary, maxLines = 1) },
                 actions = {
                     TextButton(onClick = { showProDialog = true }) { Text(if (isPro) "PRO ✓" else "PRO", maxLines = 1) }
+                    TextButton(onClick = { showLanguageDialog = true }) { Text("🌐", maxLines = 1) }
                     TextButton(onClick = { showAboutDialog = true }) { Text(tr(context, "О приложении", "Про застосунок", "About"), maxLines = 1) }
                 }
             )
@@ -891,15 +892,25 @@ private fun DiamondWorkScreen(
         }
         LinearProgressIndicator(progress = { (project.grid.progressPercentExact() / 100.0).toFloat().coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
 
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Button(onClick = onSave) { Text(tr(context, "Сохранить", "Зберегти", "Save"), maxLines = 1) }
-            OutlinedButton(onClick = onUndo, enabled = canUndo) { Text("↶") }
-            OutlinedButton(onClick = onRedo, enabled = canRedo) { Text("↷") }
-            OutlinedButton(onClick = { zoomCommand = (zoomCommand / 1.6f).coerceAtLeast(1f) }) { Text("−") }
-            OutlinedButton(onClick = { zoomCommand = 1f; resetKey++ }) { Text(tr(context, "По размеру", "За розміром", "Fit"), maxLines = 1) }
-            OutlinedButton(onClick = { zoomCommand = (zoomCommand * 1.6f).coerceAtMost(12f) }) { Text("+") }
-            if (sourceImage != null) OutlinedButton(onClick = onEditSettings) { Text(tr(context, "Изменить настройки", "Змінити налаштування", "Edit settings"), maxLines = 1) }
-            OutlinedButton(onClick = { showMaterials = !showMaterials }) { Text(if (showMaterials) tr(context, "Скрыть материалы", "Сховати матеріали", "Hide materials") else tr(context, "Материалы", "Матеріали", "Materials"), maxLines = 1) }
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Button(onClick = onSave, modifier = Modifier.weight(2f)) { Text(tr(context, "Сохранить", "Зберегти", "Save"), maxLines = 1) }
+                OutlinedButton(onClick = onUndo, enabled = canUndo, modifier = Modifier.weight(1f)) { Text("↶") }
+                OutlinedButton(onClick = onRedo, enabled = canRedo, modifier = Modifier.weight(1f)) { Text("↷") }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                OutlinedButton(onClick = { zoomCommand = (zoomCommand / 1.6f).coerceAtLeast(1f) }, modifier = Modifier.weight(1f)) { Text("−") }
+                OutlinedButton(onClick = { zoomCommand = 1f; resetKey++ }, modifier = Modifier.weight(2f)) { Text(tr(context, "По размеру", "За розміром", "Fit"), maxLines = 1) }
+                OutlinedButton(onClick = { zoomCommand = (zoomCommand * 1.6f).coerceAtMost(12f) }, modifier = Modifier.weight(1f)) { Text("+") }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (sourceImage != null) {
+                    OutlinedButton(onClick = onEditSettings, modifier = Modifier.weight(1f)) { Text(tr(context, "Изменить настройки", "Змінити налаштування", "Edit settings"), maxLines = 1) }
+                }
+                OutlinedButton(onClick = { showMaterials = !showMaterials }, modifier = Modifier.weight(1f)) {
+                    Text(if (showMaterials) tr(context, "Скрыть материалы", "Сховати матеріали", "Hide materials") else tr(context, "Материалы", "Матеріали", "Materials"), maxLines = 1)
+                }
+            }
         }
 
         if (sourceImage != null) {
@@ -963,14 +974,20 @@ private fun DiamondWorkScreen(
             }
         }
 
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedButton(onClick = onClearProgress) { Text(tr(context, "Снять отметки", "Зняти позначки", "Clear marks"), maxLines = 1) }
-            OutlinedButton(onClick = onNewProject) { Text(tr(context, "Новый проект", "Новий проєкт", "New project"), maxLines = 1) }
-            OutlinedButton(onClick = onExportProject) { Text(if (isPro) "Проект" else "Проект • PRO", maxLines = 1) }
-            OutlinedButton(onClick = onPng) { Text(if (isPro) "PNG" else "PNG • PRO", maxLines = 1) }
-            OutlinedButton(onClick = onPdf) { Text(if (isPro) "PDF" else "PDF • PRO", maxLines = 1) }
-            OutlinedButton(onClick = onCsv) { Text(if (isPro) "CSV" else "CSV • PRO", maxLines = 1) }
-            Button(onClick = onShoppingList) { Text(tr(context, "Список покупок", "Список покупок", "Shopping list"), maxLines = 1) }
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                OutlinedButton(onClick = onExportProject, modifier = Modifier.weight(1f)) { Text(if (isPro) tr(context, "Проект", "Проєкт", "Project") else tr(context, "Проект • PRO", "Проєкт • PRO", "Project • PRO"), maxLines = 1) }
+                OutlinedButton(onClick = onPng, modifier = Modifier.weight(1f)) { Text(if (isPro) "PNG" else "PNG • PRO", maxLines = 1) }
+                OutlinedButton(onClick = onPdf, modifier = Modifier.weight(1f)) { Text(if (isPro) "PDF" else "PDF • PRO", maxLines = 1) }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                OutlinedButton(onClick = onCsv, modifier = Modifier.weight(1f)) { Text(if (isPro) "CSV" else "CSV • PRO", maxLines = 1) }
+                Button(onClick = onShoppingList, modifier = Modifier.weight(2f)) { Text(tr(context, "Список покупок", "Список покупок", "Shopping list"), maxLines = 1) }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                OutlinedButton(onClick = onClearProgress, modifier = Modifier.weight(1f)) { Text(tr(context, "Снять отметки", "Зняти позначки", "Clear marks"), maxLines = 1) }
+                OutlinedButton(onClick = onNewProject, modifier = Modifier.weight(1f)) { Text(tr(context, "Новый проект", "Новий проєкт", "New project"), maxLines = 1) }
+            }
         }
         if (status.isNotBlank()) Text(status, style = MaterialTheme.typography.bodySmall, maxLines = 2)
     }

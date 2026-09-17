@@ -12,8 +12,8 @@ android {
         applicationId = "com.craftengine.diamondcraft"
         minSdk = 26
         targetSdk = 36
-        versionCode = 195
-        versionName = "1.0-rc15.4-shops-languages-sdk36"
+        versionCode = 196
+        versionName = "1.0-rc15.5-adaptive-controls-language-sdk36"
     }
 
     signingConfigs {
