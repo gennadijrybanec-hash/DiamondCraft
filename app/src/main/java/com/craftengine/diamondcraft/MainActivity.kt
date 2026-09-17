@@ -210,7 +210,7 @@ private fun DiamondApp() {
     var renameCandidate by remember { mutableStateOf<SavedProjectInfo?>(null) }
     var renameText by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
-    var busyTitle by remember { mutableStateOf("Создаём схему…") }
+    var busyTitle by remember { mutableStateOf(tr(context, "Создаём схему…", "Створюємо схему…", "Creating pattern…")) }
     var showSetup by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
     val undoStack = remember { mutableStateListOf<CraftGrid>() }
@@ -232,8 +232,8 @@ private fun DiamondApp() {
             context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use {
                 it.write(materialsCsv(p, estimate))
             }
-        }.onSuccess { status = "CSV сохранён" }
-            .onFailure { status = "Не удалось сохранить CSV" }
+        }.onSuccess { status = tr(context, "CSV сохранён", "CSV збережено", "CSV saved") }
+            .onFailure { status = tr(context, "Не удалось сохранить CSV", "Не вдалося зберегти CSV", "Could not save CSV") }
     }
 
     val pdfLauncher = rememberLauncherForActivityResult(
@@ -245,8 +245,8 @@ private fun DiamondApp() {
             context.contentResolver.openOutputStream(uri)?.use { output ->
                 writeMaterialsPdf(output, p, estimate)
             }
-        }.onSuccess { status = "PDF сохранён" }
-            .onFailure { status = "Не удалось сохранить PDF" }
+        }.onSuccess { status = tr(context, "PDF сохранён", "PDF збережено", "PDF saved") }
+            .onFailure { status = tr(context, "Не удалось сохранить PDF", "Не вдалося зберегти PDF", "Could not save PDF") }
     }
 
     val pngLauncher = rememberLauncherForActivityResult(
@@ -257,8 +257,8 @@ private fun DiamondApp() {
             context.contentResolver.openOutputStream(uri)?.use { output ->
                 writePatternPng(output, p)
             }
-        }.onSuccess { status = "PNG сохранён" }
-            .onFailure { status = "Не удалось сохранить PNG" }
+        }.onSuccess { status = tr(context, "PNG сохранён", "PNG збережено", "PNG saved") }
+            .onFailure { status = tr(context, "Не удалось сохранить PNG", "Не вдалося зберегти PNG", "Could not save PNG") }
     }
 
     val projectExportLauncher = rememberLauncherForActivityResult(
@@ -269,8 +269,8 @@ private fun DiamondApp() {
             context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use {
                 it.write(ProjectCodec.encode(p.copy(updatedAt = System.currentTimeMillis())))
             } ?: error("Output stream unavailable")
-        }.onSuccess { status = "Файл проекта экспортирован" }
-            .onFailure { status = "Не удалось экспортировать проект" }
+        }.onSuccess { status = tr(context, "Файл проекта экспортирован", "Файл проєкту експортовано", "Project file exported") }
+            .onFailure { status = tr(context, "Не удалось экспортировать проект", "Не вдалося експортувати проєкт", "Could not export project") }
     }
 
     val projectImportLauncher = rememberLauncherForActivityResult(
@@ -292,16 +292,16 @@ private fun DiamondApp() {
             colorCount = restored.grid.palette.size.toFloat().coerceIn(24f, 120f)
             saveProject(context, restored)
             savedRefresh++
-            status = "Проект импортирован: ${restored.name}"
+            status = tr(context, "Проект импортирован: ${restored.name}", "Проєкт імпортовано: ${restored.name}", "Project imported: ${restored.name}")
             showSetup = false
-        }.onFailure { status = "Не удалось импортировать файл проекта" }
+        }.onFailure { status = tr(context, "Не удалось импортировать файл проекта", "Не вдалося імпортувати файл проєкту", "Could not import project file") }
     }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
-            busyTitle = "Загружаем фотографию…"
+            busyTitle = tr(context, "Загружаем фотографию…", "Завантажуємо фото…", "Loading photo…")
             busy = true
-            status = "Загружаем фотографию…"
+            status = tr(context, "Загружаем фотографию…", "Завантажуємо фото…", "Loading photo…")
             scope.launch {
                 runCatching {
                     withContext(Dispatchers.IO) { loadCraftImage(context, uri) }
@@ -309,9 +309,9 @@ private fun DiamondApp() {
                     sourceImage = source
                     showOriginal = false
                     showSetup = true
-                    status = "Фотография выбрана. Настройте схему и нажмите «Создать схему»."
+                    status = tr(context, "Фотография выбрана. Настройте схему и нажмите «Создать схему».", "Фото обрано. Налаштуйте схему та натисніть «Створити схему».", "Photo selected. Adjust the pattern and tap Create pattern.")
                 }.onFailure {
-                    status = "Не удалось открыть изображение"
+                    status = tr(context, "Не удалось открыть изображение", "Не вдалося відкрити зображення", "Could not open image")
                 }
                 busy = false
             }
@@ -321,9 +321,9 @@ private fun DiamondApp() {
     fun generateFromSource() {
         val source = sourceImage ?: return
         if (busy) return
-        busyTitle = "Создаём схему…"
+        busyTitle = tr(context, "Создаём схему…", "Створюємо схему…", "Creating pattern…")
         busy = true
-        status = "Создаём схему…"
+        status = tr(context, "Создаём схему…", "Створюємо схему…", "Creating pattern…")
         scope.launch {
             runCatching {
                 withContext(Dispatchers.Default) {
@@ -342,15 +342,15 @@ private fun DiamondApp() {
                 undoStack.clear(); redoStack.clear()
                 project = CraftProject(
                     id = project?.id ?: UUID.randomUUID().toString(),
-                    name = project?.name ?: "Моя алмазная картина",
+                    name = project?.name ?: tr(context, "Моя алмазная картина", "Моя алмазна картина", "My diamond painting"),
                     mode = CraftMode.DIAMOND_PAINTING,
                     grid = grid,
                     updatedAt = System.currentTimeMillis()
                 )
-                status = "Схема создана: ${grid.width} × ${grid.height} • ${grid.palette.size} цветов"
+                status = tr(context, "Схема создана: ${grid.width} × ${grid.height} • ${grid.palette.size} цветов", "Схему створено: ${grid.width} × ${grid.height} • ${grid.palette.size} кольорів", "Pattern created: ${grid.width} × ${grid.height} • ${grid.palette.size} colors")
                 showSetup = false
             }.onFailure {
-                status = "Не удалось создать схему"
+                status = tr(context, "Не удалось создать схему", "Не вдалося створити схему", "Could not create pattern")
             }
             busy = false
         }
@@ -370,7 +370,7 @@ private fun DiamondApp() {
                 TextButton(onClick = {
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     clipboard.setPrimaryClip(ClipData.newPlainText("DiamondCraft — список покупок", text))
-                    status = "Список покупок скопирован"
+                    status = tr(context, "Список покупок скопирован", "Список покупок скопійовано", "Shopping list copied")
                     shoppingListText = null
                 }) { Text(tr(context, "Копировать", "Копіювати", "Copy")) }
             },
@@ -384,7 +384,7 @@ private fun DiamondApp() {
         AlertDialog(
             onDismissRequest = { showNewProjectConfirm = false },
             title = { Text(tr(context, "Новый проект", "Новий проєкт", "New project"), maxLines = 1) },
-            text = { Text("Очистить текущую схему и выбрать новую фотографию? Несохранённые отметки текущего проекта будут потеряны.") },
+            text = { Text(tr(context, "Очистить текущую схему и выбрать новую фотографию? Несохранённые отметки будут потеряны.", "Очистити поточну схему та вибрати нове фото? Незбережені позначки буде втрачено.", "Clear the current pattern and choose a new photo? Unsaved marks will be lost.")) },
             confirmButton = {
                 TextButton(onClick = {
                     project = null
@@ -392,10 +392,10 @@ private fun DiamondApp() {
                     sourceImage = null
                     showOriginal = false
                     shoppingListText = null
-                    status = "Выберите фотографию"
+                    status = tr(context, "Выберите фотографию", "Оберіть фотографію", "Choose a photo")
                     showSetup = true
                     showNewProjectConfirm = false
-                }) { Text("Очистить") }
+                }) { Text(tr(context, "Очистить", "Очистити", "Clear")) }
             },
             dismissButton = {
                 TextButton(onClick = { showNewProjectConfirm = false }) { Text(tr(context, "Отмена", "Скасувати", "Cancel")) }
@@ -406,15 +406,15 @@ private fun DiamondApp() {
     deleteCandidate?.let { saved ->
         AlertDialog(
             onDismissRequest = { deleteCandidate = null },
-            title = { Text("Удалить сохранённый проект?") },
+            title = { Text(tr(context, "Удалить сохранённый проект?", "Видалити збережений проєкт?", "Delete saved project?")) },
             text = { Text("${saved.project.name} • ${saved.project.grid.width}×${saved.project.grid.height}", maxLines = 2) },
             confirmButton = {
                 TextButton(onClick = {
                     if (saved.file.delete()) {
                         savedRefresh++
-                        status = "Сохранённый проект удалён"
+                        status = tr(context, "Сохранённый проект удалён", "Збережений проєкт видалено", "Saved project deleted")
                     } else {
-                        status = "Не удалось удалить проект"
+                        status = tr(context, "Не удалось удалить проект", "Не вдалося видалити проєкт", "Could not delete project")
                     }
                     deleteCandidate = null
                 }) { Text(tr(context, "Удалить", "Видалити", "Delete"), maxLines = 1) }
@@ -431,26 +431,22 @@ private fun DiamondApp() {
             title = { Text("DiamondCraft Pro") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Бесплатная версия:")
-                    Text("• схемы до ${CommercialLimits.FREE_MAX_WIDTH} страз по ширине")
-                    Text("• до ${CommercialLimits.FREE_MAX_COLORS} цветов")
-                    Text("• сохранение проектов и отслеживание прогресса")
+                    Text(tr(context, "Бесплатная версия", "Безкоштовна версія", "Free version"), fontWeight = FontWeight.Bold)
+                    Text(tr(context, "• схемы до ${CommercialLimits.FREE_MAX_WIDTH} страз по ширине", "• схеми до ${CommercialLimits.FREE_MAX_WIDTH} стразів завширшки", "• patterns up to ${CommercialLimits.FREE_MAX_WIDTH} drills wide"))
+                    Text(tr(context, "• до ${CommercialLimits.FREE_MAX_COLORS} цветов", "• до ${CommercialLimits.FREE_MAX_COLORS} кольорів", "• up to ${CommercialLimits.FREE_MAX_COLORS} colors"))
+                    Text(tr(context, "• сохранение проектов и прогресса", "• збереження проєктів і прогресу", "• project saving and progress tracking"))
                     HorizontalDivider()
-                    Text("DiamondCraft Pro:")
-                    Text("• схемы до ${CommercialLimits.PRO_MAX_WIDTH} страз")
-                    Text("• до ${CommercialLimits.PRO_MAX_COLORS} цветов")
-                    Text("• PNG, PDF и CSV экспорт")
-                    Text("• импорт/экспорт .diamondcraft")
-                    Text("• расширенные профили обработки")
-                    Text("• будущий подбор расходников по каталогам")
-                    HorizontalDivider()
-                    Text(
-                        if (BuildConfig.DEBUG)
-                            "Тестовая APK-сборка: Pro открыт для проверки всех функций."
-                        else
-                            (billing?.status ?: "Google Play Billing недоступен"),
-                        style = MaterialTheme.typography.bodySmall
-                    )
+                    Text("DiamondCraft Pro", fontWeight = FontWeight.Bold)
+                    Text(tr(context, "• схемы до ${CommercialLimits.PRO_MAX_WIDTH} страз", "• схеми до ${CommercialLimits.PRO_MAX_WIDTH} стразів", "• patterns up to ${CommercialLimits.PRO_MAX_WIDTH} drills"))
+                    Text(tr(context, "• до ${CommercialLimits.PRO_MAX_COLORS} цветов", "• до ${CommercialLimits.PRO_MAX_COLORS} кольорів", "• up to ${CommercialLimits.PRO_MAX_COLORS} colors"))
+                    Text(tr(context, "• экспорт PNG, PDF и CSV", "• експорт PNG, PDF і CSV", "• PNG, PDF and CSV export"))
+                    Text(tr(context, "• импорт и экспорт проектов .diamondcraft", "• імпорт і експорт проєктів .diamondcraft", "• .diamondcraft project import and export"))
+                    Text(tr(context, "• расширенные профили обработки", "• розширені профілі обробки", "• advanced processing profiles"))
+                    Text(tr(context, "• расчёт материалов и поиск в магазинах", "• розрахунок матеріалів і пошук у магазинах", "• material calculation and store search"))
+                    if (!BuildConfig.DEBUG && !isPro) {
+                        HorizontalDivider()
+                        Text(billing?.status ?: tr(context, "Google Play Billing недоступен", "Google Play Billing недоступний", "Google Play Billing unavailable"), style = MaterialTheme.typography.bodySmall)
+                    }
                 }
             },
             confirmButton = {
@@ -481,26 +477,26 @@ private fun DiamondApp() {
             title = { Text("💎  DiamondCraft") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("DiamondCraft ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-                    Text("Превращайте любимые фотографии в красивые схемы алмазной мозаики.")
+                    Text(tr(context, "Версия 1.0", "Версія 1.0", "Version 1.0"), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                    Text(tr(context, "Создавайте схемы алмазной мозаики из фотографий и ведите проект от изображения до списка материалов.", "Створюйте схеми алмазної мозаїки з фотографій і ведіть проєкт від зображення до списку матеріалів.", "Create diamond-painting patterns from photos and manage the project from image to material list."))
                     HorizontalDivider()
-                    Text("Возможности:")
-                    Text("• фото → схема")
-                    Text("• интеллектуальная обработка и цветопередача")
-                    Text("• квадратные и круглые стразы")
-                    Text("• масштабирование и отметка прогресса")
-                    Text("• сохранение и перенос проектов")
-                    Text("• PNG, PDF и CSV")
-                    Text("• расчёт страз, запаса и основы")
-                    Text("• список покупок")
-                    Text(tr(context, "• Undo / Redo и удобное управление проектами", "• Undo / Redo і зручне керування проєктами", "• Undo / Redo and convenient project controls"))
+                    Text(tr(context, "Возможности", "Можливості", "Features"), fontWeight = FontWeight.Bold)
+                    Text(tr(context, "• фото → схема", "• фото → схема", "• photo → pattern"))
+                    Text(tr(context, "• квадратные и круглые стразы", "• квадратні та круглі стрази", "• square and round drills"))
+                    Text(tr(context, "• масштабирование, перемещение и отметка прогресса", "• масштабування, переміщення та відмітка прогресу", "• zoom, pan and progress marking"))
+                    Text(tr(context, "• сохранение, импорт и экспорт проектов", "• збереження, імпорт та експорт проєктів", "• project save, import and export"))
+                    Text(tr(context, "• PNG, PDF и CSV", "• PNG, PDF і CSV", "• PNG, PDF and CSV"))
+                    Text(tr(context, "• расчёт основы, страз и запаса", "• розрахунок основи, стразів і запасу", "• canvas, drill and reserve calculation"))
+                    Text(tr(context, "• список покупок и поиск материалов в магазинах", "• список покупок і пошук матеріалів у магазинах", "• shopping list and material search in stores"))
                     OutlinedButton(onClick = { showLanguageDialog = true }, modifier = Modifier.fillMaxWidth()) {
                         Text(tr(context, "Язык приложения: ${languageLabel(context)}", "Мова застосунку: ${languageLabel(context)}", "App language: ${languageLabel(context)}"))
                     }
                     HorizontalDivider()
                     Text(
-                        "Фотографии и проекты обрабатываются локально на устройстве. " +
-                            "Платные функции будут подключены через Google Play Billing.",
+                        tr(context,
+                            "Фотографии и проекты обрабатываются локально на устройстве. Покупка Pro выполняется через Google Play.",
+                            "Фотографії та проєкти обробляються локально на пристрої. Купівля Pro виконується через Google Play.",
+                            "Photos and projects are processed locally on the device. Pro purchase is handled through Google Play."),
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
@@ -539,7 +535,7 @@ private fun DiamondApp() {
     if (showSaveAsDialog) {
         AlertDialog(
             onDismissRequest = { showSaveAsDialog = false },
-            title = { Text("Сохранить проект как") },
+            title = { Text(tr(context, "Сохранить проект как", "Зберегти проєкт як", "Save project as")) },
             text = {
                 OutlinedTextField(
                     value = saveAsName,
@@ -551,12 +547,12 @@ private fun DiamondApp() {
             confirmButton = {
                 TextButton(onClick = {
                     val p = project ?: return@TextButton
-                    val name = saveAsName.trim().ifBlank { "Проект ${savedProjects.size + 1}" }
+                    val name = saveAsName.trim().ifBlank { tr(context, "Проект ${savedProjects.size + 1}", "Проєкт ${savedProjects.size + 1}", "Project ${savedProjects.size + 1}") }
                     val named = p.copy(name = name, updatedAt = System.currentTimeMillis())
                     project = named
                     saveProject(context, named)
                     savedRefresh++
-                    status = "Проект сохранён: $name"
+                    status = tr(context, "Проект сохранён: $name", "Проєкт збережено: $name", "Project saved: $name")
                     showSaveAsDialog = false
                 }) { Text(tr(context, "Сохранить", "Зберегти", "Save"), maxLines = 1) }
             },
@@ -567,7 +563,7 @@ private fun DiamondApp() {
     renameCandidate?.let { saved ->
         AlertDialog(
             onDismissRequest = { renameCandidate = null },
-            title = { Text("Переименовать проект") },
+            title = { Text(tr(context, "Переименовать проект", "Перейменувати проєкт", "Rename project")) },
             text = {
                 OutlinedTextField(
                     value = renameText,
@@ -584,7 +580,7 @@ private fun DiamondApp() {
                         saveProject(context, renamed)
                         if (project?.id == renamed.id) project = renamed
                         savedRefresh++
-                        status = "Проект переименован: $name"
+                        status = tr(context, "Проект переименован: $name", "Проєкт перейменовано: $name", "Project renamed: $name")
                     }
                     renameCandidate = null
                 }) { Text(tr(context, "Переименовать", "Перейменувати", "Rename")) }
@@ -642,7 +638,7 @@ private fun DiamondApp() {
                         showSetup = false
                         width = saved.project.grid.width.toFloat().coerceIn(30f, maxWidth.toFloat())
                         colorCount = saved.project.grid.palette.size.toFloat().coerceIn(24f, maxColors.toFloat())
-                        status = "Проект восстановлен: ${saved.project.name}"
+                        status = tr(context, "Проект восстановлен: ${saved.project.name}", "Проєкт відновлено: ${saved.project.name}", "Project restored: ${saved.project.name}")
                     },
                     onRename = { saved -> renameCandidate = saved; renameText = saved.project.name },
                     onDelete = { saved -> deleteCandidate = saved }
@@ -688,7 +684,7 @@ private fun DiamondApp() {
                         project = p.copy(grid = ProgressEngine.clear(p.grid), updatedAt = System.currentTimeMillis())
                     },
                     onSave = {
-                        if (p.name == "Моя алмазная картина") {
+                        if (p.name in setOf("Моя алмазная картина", "Моя алмазна картина", "My diamond painting")) {
                             saveAsName = ""
                             showSaveAsDialog = true
                         } else {
@@ -696,12 +692,12 @@ private fun DiamondApp() {
                             project = saved
                             saveProject(context, saved)
                             savedRefresh++
-                            status = "Проект сохранён: ${saved.name}"
+                            status = tr(context, "Проект сохранён: ${saved.name}", "Проєкт збережено: ${saved.name}", "Project saved: ${saved.name}")
                         }
                     },
                     onNewProject = { showNewProjectConfirm = true },
                     onEditSettings = {
-                        if (sourceImage != null) showSetup = true else status = "Для изменения настроек исходная фотография недоступна"
+                        if (sourceImage != null) showSetup = true else status = tr(context, "Для изменения настроек исходная фотография недоступна", "Початкове фото недоступне для зміни налаштувань", "Original photo is unavailable for editing settings")
                     },
                     onDrillShape = { drillShape = it },
                     onReserve = { reserve = it },
@@ -717,7 +713,7 @@ private fun DiamondApp() {
                     onCsv = {
                         if (isPro) csvLauncher.launch("DiamondCraft_${p.grid.width}x${p.grid.height}_materials.csv") else showProDialog = true
                     },
-                    onShoppingList = { shoppingListText = buildShoppingList(p, materialEstimate(p, drillShape, reserve.toInt())) }
+                    onShoppingList = { shoppingListText = buildShoppingList(context, p, materialEstimate(p, drillShape, reserve.toInt())) }
                 )
             }
 
@@ -732,7 +728,7 @@ private fun DiamondApp() {
                             CircularProgressIndicator(modifier = Modifier.size(30.dp), strokeWidth = 3.dp)
                             Column {
                                 Text(busyTitle, style = MaterialTheme.typography.titleMedium)
-                                Text(if (busyTitle.startsWith("Загружаем")) "Подготавливаем изображение" else "Идёт обработка изображения", style = MaterialTheme.typography.bodySmall)
+                                Text(busyTitle, style = MaterialTheme.typography.bodySmall)
                             }
                         }
                     }
@@ -778,7 +774,7 @@ private fun DiamondSetupScreen(
             ) {
                 Text(tr(context, "💎 Фото → схема алмазной мозаики", "💎 Фото → схема алмазної мозаїки", "💎 Photo → diamond painting pattern"), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
                 Text(
-                    if (isPro) "DiamondCraft Pro" else "Бесплатный режим • до ${CommercialLimits.FREE_MAX_WIDTH} страз / ${CommercialLimits.FREE_MAX_COLORS} цветов",
+                    if (isPro) "DiamondCraft Pro" else tr(context, "Бесплатно • до ${CommercialLimits.FREE_MAX_WIDTH} страз / ${CommercialLimits.FREE_MAX_COLORS} цветов", "Безкоштовно • до ${CommercialLimits.FREE_MAX_WIDTH} стразів / ${CommercialLimits.FREE_MAX_COLORS} кольорів", "Free • up to ${CommercialLimits.FREE_MAX_WIDTH} drills / ${CommercialLimits.FREE_MAX_COLORS} colors"),
                     style = MaterialTheme.typography.bodySmall
                 )
 
@@ -787,11 +783,11 @@ private fun DiamondSetupScreen(
                 }
                 Text(if (sourceSelected) tr(context, "Фотография выбрана ✓", "Фото обрано ✓", "Photo selected ✓") else tr(context, "Фотография не выбрана", "Фото не обрано", "Photo not selected"), style = MaterialTheme.typography.bodySmall)
 
-                Text("Ширина схемы: ${width.toInt()} страз")
+                Text(tr(context, "Ширина схемы: ${width.toInt()} страз", "Ширина схеми: ${width.toInt()} стразів", "Pattern width: ${width.toInt()} drills"))
                 Slider(width, onWidth, valueRange = 30f..maxWidth.toFloat(), steps = 16, enabled = !busy)
-                Text("Детализация цвета: ${colorCount.toInt()} цветов")
+                Text(tr(context, "Детализация цвета: ${colorCount.toInt()} цветов", "Деталізація кольору: ${colorCount.toInt()} кольорів", "Color detail: ${colorCount.toInt()} colors"))
                 Slider(colorCount, onColorCount, valueRange = 24f..maxColors.toFloat(), steps = 7, enabled = !busy)
-                Text("Для портретов: 100–140 страз и 60–84 цвета. Для пейзажей: 120–180 и 72–108 цветов.", style = MaterialTheme.typography.bodySmall)
+                Text(tr(context, "Подсказка: для портретов обычно достаточно 100–140 страз по ширине, для пейзажей — 120–180.", "Підказка: для портретів зазвичай достатньо 100–140 стразів завширшки, для пейзажів — 120–180.", "Tip: portraits usually work well at 100–140 drills wide; landscapes at 120–180."), style = MaterialTheme.typography.bodySmall)
 
                 Text(tr(context, "Профиль обработки", "Профіль обробки", "Processing profile"))
                 SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
@@ -810,7 +806,7 @@ private fun DiamondSetupScreen(
                         }
                     }
                 }
-                Text("Яркий — рекомендуемый режим для алмазной мозаики.", style = MaterialTheme.typography.bodySmall)
+                Text(tr(context, "Яркий — рекомендуемый режим для алмазной мозаики.", "Яскравий — рекомендований режим для алмазної мозаїки.", "Vivid is the recommended mode for diamond painting."), style = MaterialTheme.typography.bodySmall)
 
                 OutlinedButton(onClick = onImport, modifier = Modifier.fillMaxWidth(), enabled = !busy) { Text(tr(context, "Импорт проекта (.diamondcraft)", "Імпорт проєкту (.diamondcraft)", "Import project (.diamondcraft)")) }
                 Text(status, style = MaterialTheme.typography.bodySmall)
@@ -886,7 +882,7 @@ private fun DiamondWorkScreen(
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Column(Modifier.weight(1f)) {
                 Text(project.name, style = MaterialTheme.typography.titleMedium, maxLines = 1)
-                Text("${project.grid.width} × ${project.grid.height} • ${project.grid.palette.size} цветов", style = MaterialTheme.typography.bodySmall)
+                Text(tr(context, "${project.grid.width} × ${project.grid.height} • ${project.grid.palette.size} цветов", "${project.grid.width} × ${project.grid.height} • ${project.grid.palette.size} кольорів", "${project.grid.width} × ${project.grid.height} • ${project.grid.palette.size} colors"), style = MaterialTheme.typography.bodySmall)
             }
             Text("${stats.completedDrills}/${stats.totalDrills}", style = MaterialTheme.typography.bodySmall)
         }
@@ -937,10 +933,10 @@ private fun DiamondWorkScreen(
                             SegmentedButton(selected = drillShape == shape, onClick = { onDrillShape(shape) }, shape = SegmentedButtonDefaults.itemShape(index, DrillShape.entries.size)) { Text(drillShapeName(context, shape), maxLines = 1) }
                         }
                     }
-                    Text("Запас страз: ${reserve.toInt()}%")
+                    Text(tr(context, "Запас страз: ${reserve.toInt()}%", "Запас стразів: ${reserve.toInt()}%", "Drill reserve: ${reserve.toInt()}%"))
                     Slider(reserve, onReserve, valueRange = 5f..20f, steps = 2)
-                    Text("Картина: ${cm(estimate.pictureWidthCm)} × ${cm(estimate.pictureHeightCm)} см")
-                    Text("Основа: ${cm(estimate.canvasWidthCm)} × ${cm(estimate.canvasHeightCm)} см")
+                    Text(tr(context, "Картина: ${cm(estimate.pictureWidthCm)} × ${cm(estimate.pictureHeightCm)} см", "Картина: ${cm(estimate.pictureWidthCm)} × ${cm(estimate.pictureHeightCm)} см", "Picture: ${cm(estimate.pictureWidthCm)} × ${cm(estimate.pictureHeightCm)} cm"))
+                    Text(tr(context, "Основа: ${cm(estimate.canvasWidthCm)} × ${cm(estimate.canvasHeightCm)} см", "Основа: ${cm(estimate.canvasWidthCm)} × ${cm(estimate.canvasHeightCm)} см", "Canvas: ${cm(estimate.canvasWidthCm)} × ${cm(estimate.canvasHeightCm)} cm"))
                     Text(tr(context,
                         "Стразы: ${estimate.totalRequiredDrills} шт. • примерно ${estimate.totalBags} пак.",
                         "Стрази: ${estimate.totalRequiredDrills} шт. • приблизно ${estimate.totalBags} пак.",
@@ -1018,21 +1014,21 @@ private fun listSavedProjects(context: Context): List<SavedProjectInfo> {
         .orEmpty()
 }
 
-private fun buildShoppingList(project: CraftProject, estimate: DiamondMaterialEstimate): String = buildString {
-    appendLine("DiamondCraft — список покупок")
-    appendLine("Проект: ${project.name}")
-    appendLine("Картина: ${cm(estimate.pictureWidthCm)} × ${cm(estimate.pictureHeightCm)} см")
-    appendLine("Клеевая основа: ${cm(estimate.canvasWidthCm)} × ${cm(estimate.canvasHeightCm)} см")
-    appendLine("Стразы: ${estimate.drillShape.displayName.lowercase()}")
-    appendLine("Запас: ${estimate.reservePercent}%")
-    appendLine("Всего купить: ${estimate.totalRequiredDrills} шт. (~${estimate.totalBags} пак. по 200 шт.)")
+private fun buildShoppingList(context: Context, project: CraftProject, estimate: DiamondMaterialEstimate): String = buildString {
+    appendLine(tr(context, "DiamondCraft — список покупок", "DiamondCraft — список покупок", "DiamondCraft — shopping list"))
+    appendLine(tr(context, "Проект: ${project.name}", "Проєкт: ${project.name}", "Project: ${project.name}"))
+    appendLine(tr(context, "Картина: ${cm(estimate.pictureWidthCm)} × ${cm(estimate.pictureHeightCm)} см", "Картина: ${cm(estimate.pictureWidthCm)} × ${cm(estimate.pictureHeightCm)} см", "Picture: ${cm(estimate.pictureWidthCm)} × ${cm(estimate.pictureHeightCm)} cm"))
+    appendLine(tr(context, "Клеевая основа: ${cm(estimate.canvasWidthCm)} × ${cm(estimate.canvasHeightCm)} см", "Клейова основа: ${cm(estimate.canvasWidthCm)} × ${cm(estimate.canvasHeightCm)} см", "Adhesive canvas: ${cm(estimate.canvasWidthCm)} × ${cm(estimate.canvasHeightCm)} cm"))
+    appendLine(tr(context, "Стразы: ${drillShapeName(context, estimate.drillShape).lowercase()}", "Стрази: ${drillShapeName(context, estimate.drillShape).lowercase()}", "Drills: ${drillShapeName(context, estimate.drillShape).lowercase()}"))
+    appendLine(tr(context, "Запас: ${estimate.reservePercent}%", "Запас: ${estimate.reservePercent}%", "Reserve: ${estimate.reservePercent}%"))
+    appendLine(tr(context, "Всего купить: ${estimate.totalRequiredDrills} шт. (~${estimate.totalBags} пак. по 200 шт.)", "Усього купити: ${estimate.totalRequiredDrills} шт. (~${estimate.totalBags} пак. по 200 шт.)", "Total to buy: ${estimate.totalRequiredDrills} pcs (~${estimate.totalBags} bags of 200)"))
     appendLine()
-    appendLine("По цветам:")
+    appendLine(tr(context, "По цветам:", "За кольорами:", "By color:"))
     estimate.colors.forEachIndexed { index, item ->
-        appendLine("${index + 1}. ${item.color.id}: ${item.requiredCount} шт. (${item.bags} пак.)")
+        appendLine(tr(context, "${index + 1}. ${item.color.id}: ${item.requiredCount} шт. (${item.bags} пак.)", "${index + 1}. ${item.color.id}: ${item.requiredCount} шт. (${item.bags} пак.)", "${index + 1}. ${item.color.id}: ${item.requiredCount} pcs (${item.bags} bags)"))
     }
     appendLine()
-    appendLine("Дополнительно: клеевая основа, лоток, стилус, воск/клей.")
+    appendLine(tr(context, "Дополнительно: клеевая основа, лоток, стилус, воск/клей.", "Додатково: клейова основа, лоток, стилус, віск/клей.", "Also: adhesive canvas, tray, stylus, wax/glue."))
 }
 
 private fun materialsCsv(project: CraftProject, estimate: DiamondMaterialEstimate): String = buildString {
