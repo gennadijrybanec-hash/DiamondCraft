@@ -1183,7 +1183,9 @@ private fun DiamondGrid(
                         val event = awaitPointerEvent()
                         val pressed = event.changes.filter { it.pressed }
                         if (pressed.isEmpty()) break
+
                         if (pressed.size >= 2) {
+                            // Two fingers: zoom + pan, keeping the content inside its bounds.
                             val zoom = event.calculateZoom()
                             val panChange = event.calculatePan()
                             val newScale = (scale * zoom).coerceIn(1f, 12f)
@@ -1198,6 +1200,23 @@ private fun DiamondGrid(
                             )
                             scale = newScale
                             event.changes.forEach { it.consume() }
+                        } else if (scale > 1.001f) {
+                            // One finger on an enlarged pattern: move the pattern itself.
+                            // At fit scale the event is not consumed, so the outer page can scroll.
+                            val change = pressed.first()
+                            val delta = change.position - change.previousPosition
+                            if (delta != Offset.Zero) {
+                                val base = min(size.width.toFloat() / grid.width.toFloat(), size.height.toFloat() / grid.height.toFloat())
+                                val contentWidth = base * scale * grid.width
+                                val contentHeight = base * scale * grid.height
+                                val maxPanX = max(0f, (contentWidth - size.width) / 2f)
+                                val maxPanY = max(0f, (contentHeight - size.height) / 2f)
+                                pan = Offset(
+                                    (pan.x + delta.x).coerceIn(-maxPanX, maxPanX),
+                                    (pan.y + delta.y).coerceIn(-maxPanY, maxPanY)
+                                )
+                                change.consume()
+                            }
                         }
                     }
                 }
