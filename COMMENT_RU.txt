@@ -1,1 +1,2 @@
-DiamondCraft v199 — исправлена ошибка сборки v198: добавлен недостающий импорт FontWeight. Финальная полировка сохранена без других изменений.
+DiamondCraft v204 — отладочная проверка бесплатного режима, без вмешательства в Google Play Billing и рабочие PDF/материалы. Добавлена проверка Pro в обработчике импорта, общий расчет доступа. В Google Play пока не отправлять.
+Коммит: DiamondCraft v204: audit Pro gates and add debug-only Free verification

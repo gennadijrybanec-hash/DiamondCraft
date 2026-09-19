@@ -218,11 +218,13 @@ private fun DiamondApp() {
     val redoStack = remember { mutableStateListOf<CraftGrid>() }
     // Do not unlock Pro in debug builds: test the same entitlement rules as release.
     val billing = remember { PlayBillingController(context.applicationContext) }
-    val isPro = billing.isPro
+    // Debug-only forced Free lets QA verify the paywall even when Play restores a test purchase.
+    var forceFreeForDebugTest by remember { mutableStateOf(false) }
+    val isPro = ProAccess.allowed(billing.isPro, BuildConfig.DEBUG && forceFreeForDebugTest)
 
     val savedProjects = remember(savedRefresh) { listSavedProjects(context) }
-    val maxWidth = if (isPro) CommercialLimits.PRO_MAX_WIDTH else CommercialLimits.FREE_MAX_WIDTH
-    val maxColors = if (isPro) CommercialLimits.PRO_MAX_COLORS else CommercialLimits.FREE_MAX_COLORS
+    val maxWidth = ProAccess.maxWidth(isPro)
+    val maxColors = ProAccess.maxColors(isPro)
 
     val csvLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("text/csv")
@@ -296,6 +298,7 @@ private fun DiamondApp() {
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) runCatching {
+            check(isPro) { "Pro required" }
             val text = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
                 ?: error("Input stream unavailable")
             ProjectCodec.decode(text).also { imported ->
@@ -449,7 +452,15 @@ private fun DiamondApp() {
             onDismissRequest = { showProDialog = false },
             title = { Text("DiamondCraft Pro") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (BuildConfig.DEBUG) {
+                        Text("ДИАГНОСТИКА APK • Play=${billing.isPro} • режим=${if (isPro) "PRO" else "FREE"}", style = MaterialTheme.typography.bodySmall)
+                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            Checkbox(checked = forceFreeForDebugTest, onCheckedChange = { forceFreeForDebugTest = it })
+                            Text("Проверить ограничения Free (только debug APK)", style = MaterialTheme.typography.bodySmall)
+                        }
+                        HorizontalDivider()
+                    }
                     Text(tr(context, "Бесплатная версия", "Безкоштовна версія", "Free version"), fontWeight = FontWeight.Bold)
                     Text(tr(context, "• схемы до ${CommercialLimits.FREE_MAX_WIDTH} страз по ширине", "• схеми до ${CommercialLimits.FREE_MAX_WIDTH} стразів завширшки", "• patterns up to ${CommercialLimits.FREE_MAX_WIDTH} drills wide"))
                     Text(tr(context, "• до ${CommercialLimits.FREE_MAX_COLORS} цветов", "• до ${CommercialLimits.FREE_MAX_COLORS} кольорів", "• up to ${CommercialLimits.FREE_MAX_COLORS} colors"))
@@ -613,7 +624,7 @@ private fun DiamondApp() {
             TopAppBar(
                 title = { Text("DiamondCraft", color = MaterialTheme.colorScheme.primary, maxLines = 1, fontSize = 17.sp) },
                 actions = {
-                    TextButton(onClick = { showProDialog = true }) { Text(if (isPro) "PRO ✓" else "PRO", maxLines = 1) }
+                    TextButton(onClick = { showProDialog = true }) { Text(if (BuildConfig.DEBUG && forceFreeForDebugTest) "FREE ТЕСТ" else if (isPro) "PRO ✓" else "PRO", maxLines = 1) }
                     IconButton(onClick = { showLanguageDialog = true }) { Text("🌐") }
                     IconButton(onClick = { showAboutDialog = true }) { Text("ⓘ") }
                 }
