@@ -35,3 +35,7 @@
 - RC9 intentionally unlocks Pro for complete device testing;
 - no fake purchase state is stored;
 - production entitlement will come from Google Play Billing.
+
+
+## RC15.3 performance workspace
+См. `docs/RC15_3_PERFORMANCE_WORKSPACE_RU.md`.
