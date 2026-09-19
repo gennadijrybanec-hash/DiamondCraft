@@ -216,9 +216,9 @@ private fun DiamondApp() {
     val scope = rememberCoroutineScope()
     val undoStack = remember { mutableStateListOf<CraftGrid>() }
     val redoStack = remember { mutableStateListOf<CraftGrid>() }
-    // Debug APK stays fully unlocked for our device testing. Release builds use Google Play entitlement.
-    val billing = remember { if (BuildConfig.DEBUG) null else PlayBillingController(context.applicationContext) }
-    val isPro = BuildConfig.DEBUG || (billing?.isPro == true)
+    // Do not unlock Pro in debug builds: test the same entitlement rules as release.
+    val billing = remember { PlayBillingController(context.applicationContext) }
+    val isPro = billing.isPro
 
     val savedProjects = remember(savedRefresh) { listSavedProjects(context) }
     val maxWidth = if (isPro) CommercialLimits.PRO_MAX_WIDTH else CommercialLimits.FREE_MAX_WIDTH
@@ -458,9 +458,9 @@ private fun DiamondApp() {
                     Text(tr(context, "• импорт и экспорт проектов .diamondcraft", "• імпорт і експорт проєктів .diamondcraft", "• .diamondcraft project import and export"))
                     Text(tr(context, "• расширенные профили обработки", "• розширені профілі обробки", "• advanced processing profiles"))
                     Text(tr(context, "• расчёт материалов и поиск в магазинах", "• розрахунок матеріалів і пошук у магазинах", "• material calculation and store search"))
-                    if (!BuildConfig.DEBUG && !isPro) {
+                    if (!isPro) {
                         HorizontalDivider()
-                        Text(billing?.status ?: tr(context, "Google Play Billing недоступен", "Google Play Billing недоступний", "Google Play Billing unavailable"), style = MaterialTheme.typography.bodySmall)
+                        Text(billing.status ?: tr(context, "Google Play Billing недоступен", "Google Play Billing недоступний", "Google Play Billing unavailable"), style = MaterialTheme.typography.bodySmall)
                     }
                 }
             },
@@ -471,7 +471,7 @@ private fun DiamondApp() {
                     TextButton(onClick = {
                         val activity = context.findActivity()
                         if (activity != null) {
-                            billing?.launchPurchase(activity)
+                            billing.launchPurchase(activity)
                         } else {
                             status = "Не удалось открыть окно Google Play: Activity не найдена"
                         }
@@ -479,8 +479,8 @@ private fun DiamondApp() {
                 }
             },
             dismissButton = {
-                if (!BuildConfig.DEBUG && !isPro) {
-                    TextButton(onClick = { billing?.refresh() }) { Text(tr(context, "Восстановить покупку", "Відновити покупку", "Restore purchase")) }
+                if (!isPro) {
+                    TextButton(onClick = { billing.refresh() }) { Text(tr(context, "Восстановить покупку", "Відновити покупку", "Restore purchase")) }
                 }
             }
         )
@@ -997,9 +997,9 @@ private fun DiamondWorkScreen(
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 OutlinedButton(onClick = onCsv, modifier = Modifier.weight(1f)) { Text(if (isPro) "CSV" else "CSV • PRO", maxLines = 1) }
-                OutlinedButton(onClick = onMaterialsPdf, modifier = Modifier.weight(1f)) { Text(if (isPro) tr(context, "Материалы PDF", "Матеріали PDF", "Materials PDF") else "PDF • PRO", maxLines = 1) }
-                Button(onClick = onShoppingList, modifier = Modifier.weight(2f)) { Text(tr(context, "Список покупок", "Список покупок", "Shopping list"), maxLines = 1) }
+                OutlinedButton(onClick = onMaterialsPdf, modifier = Modifier.weight(2f)) { Text(if (isPro) tr(context, "Материалы PDF", "Матеріали PDF", "Materials PDF") else tr(context, "Материалы PDF • PRO", "Матеріали PDF • PRO", "Materials PDF • PRO"), maxLines = 1) }
             }
+            Button(onClick = onShoppingList, modifier = Modifier.fillMaxWidth()) { Text(tr(context, "Список покупок", "Список покупок", "Shopping list"), maxLines = 1) }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 OutlinedButton(onClick = onClearProgress, modifier = Modifier.weight(1f)) { Text(tr(context, "Снять отметки", "Зняти позначки", "Clear marks"), maxLines = 1) }
                 OutlinedButton(onClick = onNewProject, modifier = Modifier.weight(1f)) { Text(tr(context, "Новый проект", "Новий проєкт", "New project"), maxLines = 1) }
