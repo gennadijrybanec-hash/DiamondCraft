@@ -1,2 +1,1 @@
-DiamondCraft v204 — отладочная проверка бесплатного режима, без вмешательства в Google Play Billing и рабочие PDF/материалы. Добавлена проверка Pro в обработчике импорта, общий расчет доступа. В Google Play пока не отправлять.
-Коммит: DiamondCraft v204: audit Pro gates and add debug-only Free verification
+DiamondCraft v205: remove debug Free-test controls; retain Play Billing entitlement and working exports.

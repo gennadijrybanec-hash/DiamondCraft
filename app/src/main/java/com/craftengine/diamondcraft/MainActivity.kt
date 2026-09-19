@@ -218,9 +218,8 @@ private fun DiamondApp() {
     val redoStack = remember { mutableStateListOf<CraftGrid>() }
     // Do not unlock Pro in debug builds: test the same entitlement rules as release.
     val billing = remember { PlayBillingController(context.applicationContext) }
-    // Debug-only forced Free lets QA verify the paywall even when Play restores a test purchase.
-    var forceFreeForDebugTest by remember { mutableStateOf(false) }
-    val isPro = ProAccess.allowed(billing.isPro, BuildConfig.DEBUG && forceFreeForDebugTest)
+    // Entitlement is based solely on the Google Play purchase state.
+    val isPro = ProAccess.allowed(billing.isPro)
 
     val savedProjects = remember(savedRefresh) { listSavedProjects(context) }
     val maxWidth = ProAccess.maxWidth(isPro)
@@ -453,14 +452,6 @@ private fun DiamondApp() {
             title = { Text("DiamondCraft Pro") },
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (BuildConfig.DEBUG) {
-                        Text("ДИАГНОСТИКА APK • Play=${billing.isPro} • режим=${if (isPro) "PRO" else "FREE"}", style = MaterialTheme.typography.bodySmall)
-                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                            Checkbox(checked = forceFreeForDebugTest, onCheckedChange = { forceFreeForDebugTest = it })
-                            Text("Проверить ограничения Free (только debug APK)", style = MaterialTheme.typography.bodySmall)
-                        }
-                        HorizontalDivider()
-                    }
                     Text(tr(context, "Бесплатная версия", "Безкоштовна версія", "Free version"), fontWeight = FontWeight.Bold)
                     Text(tr(context, "• схемы до ${CommercialLimits.FREE_MAX_WIDTH} страз по ширине", "• схеми до ${CommercialLimits.FREE_MAX_WIDTH} стразів завширшки", "• patterns up to ${CommercialLimits.FREE_MAX_WIDTH} drills wide"))
                     Text(tr(context, "• до ${CommercialLimits.FREE_MAX_COLORS} цветов", "• до ${CommercialLimits.FREE_MAX_COLORS} кольорів", "• up to ${CommercialLimits.FREE_MAX_COLORS} colors"))
@@ -624,7 +615,7 @@ private fun DiamondApp() {
             TopAppBar(
                 title = { Text("DiamondCraft", color = MaterialTheme.colorScheme.primary, maxLines = 1, fontSize = 17.sp) },
                 actions = {
-                    TextButton(onClick = { showProDialog = true }) { Text(if (BuildConfig.DEBUG && forceFreeForDebugTest) "FREE ТЕСТ" else if (isPro) "PRO ✓" else "PRO", maxLines = 1) }
+                    TextButton(onClick = { showProDialog = true }) { Text(if (isPro) "PRO ✓" else "PRO", maxLines = 1) }
                     IconButton(onClick = { showLanguageDialog = true }) { Text("🌐") }
                     IconButton(onClick = { showAboutDialog = true }) { Text("ⓘ") }
                 }
