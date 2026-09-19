@@ -1,0 +1,23 @@
+DiamondCraft v200 (1.0.2) — подготовка к Google Play
+
+Источник: DiamondCraft_v199_FINAL_FULL_SOURCE.zip, сохранены пакет com.craftengine.diamondcraft и ключ загрузки через существующие секреты GitHub.
+
+Исправлено:
+1. PDF на экране схемы теперь содержит САМУ СХЕМУ (цветные клетки, номера цветов, страницы по 40x54 клетки) и ключ цветов/расход. Отдельная кнопка «Материалы PDF» сохраняет прежний отчёт о расходниках. PNG — изображение схемы, CSV — расходники, «Проект» — файл .diamondcraft.
+2. Номер выпуска v200 / 1.0.2; раздел «О приложении» показывает BuildConfig.VERSION_NAME.
+3. Workflow выдаёт только подписанный AAB; при отсутствии секретов сборка не отдаёт случайно неподписанный AAB. Отладочный APK и подписанный AAB хранятся 2 дня, чтобы не засорять GitHub Actions.
+4. Право Pro для RELEASE по-прежнему зависит от Google Play Billing; DEBUG остаётся открытым для проверки, поэтому debug APK НЕЛЬЗЯ использовать для проверки платного доступа.
+
+Важно: магазины — поиск в Google по цвету/типу страз, НЕ интеграция проверенных поставщиков и не покупка внутри приложения. Колор-коды палитры — HEX; не обещать идентичности к артикулам магазинов.
+
+Проверено здесь: исходники/ссылки на функции, компиляция чистого Kotlin-модуля core. Полную Android-компиляцию, запуск на телефоне, PDF на реальном устройстве и покупку в Play выполнить здесь нельзя — это отдельные контрольные проверки после GitHub-сборки.
+
+Загрузка патча в основной репозиторий DiamondCraft (с сохранением структуры путей):
+  app/src/main/java/com/craftengine/diamondcraft/MainActivity.kt
+  app/src/main/java/com/craftengine/diamondcraft/PatternPdf.kt (НОВЫЙ)
+  app/build.gradle.kts
+  .github/workflows/main.yml
+
+GitHub commit: DiamondCraft v200 - printable pattern PDF, separate materials PDF, signed AAB, 2-day artifacts
+
+После успешной сборки: скачать DiamondCraft-v200-debug-APK и DiamondCraft-v200-GooglePlay-AAB. Установить APK для проверки экрана, PDF и материалов; для проверки ограничения Pro и самой покупки использовать тестовую RELEASE-сборку через Google Play (не DEBUG). Перед загрузкой в рабочий черновик подтвердить versionCode 200 (1.0.2), подпись и работоспособность.
