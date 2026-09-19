@@ -191,7 +191,7 @@ private fun DiamondApp() {
     val context = LocalContext.current
     var project by remember { mutableStateOf<CraftProject?>(null) }
     var width by remember { mutableFloatStateOf(100f) }
-    var colorCount by remember { mutableFloatStateOf(72f) }
+    var colorCount by remember { mutableFloatStateOf(60f) }
     var reserve by remember { mutableFloatStateOf(10f) }
     var drillShape by remember { mutableStateOf(DrillShape.SQUARE) }
     var imageProfile by remember { mutableStateOf(ImageProfile.AUTO) }
@@ -229,10 +229,11 @@ private fun DiamondApp() {
     ) { uri ->
         val p = project ?: return@rememberLauncherForActivityResult
         if (uri != null) runCatching {
+            check(isPro) { "Pro required" }
             val estimate = materialEstimate(p, drillShape, reserve.toInt())
             context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use {
                 it.write(materialsCsv(p, estimate))
-            }
+            } ?: error("Output stream unavailable")
         }.onSuccess { status = tr(context, "CSV сохранён", "CSV збережено", "CSV saved") }
             .onFailure { status = tr(context, "Не удалось сохранить CSV", "Не вдалося зберегти CSV", "Could not save CSV") }
     }
@@ -242,12 +243,13 @@ private fun DiamondApp() {
     ) { uri ->
         val p = project ?: return@rememberLauncherForActivityResult
         if (uri != null) runCatching {
+            check(isPro) { "Pro required" }
             val estimate = materialEstimate(p, drillShape, reserve.toInt())
             context.contentResolver.openOutputStream(uri)?.use { output ->
                 writePatternPdf(output, p, estimate)
             } ?: error("Output stream unavailable")
-        }.onSuccess { status = tr(context, "PDF сохранён", "PDF збережено", "PDF saved") }
-            .onFailure { status = tr(context, "Не удалось сохранить PDF", "Не вдалося зберегти PDF", "Could not save PDF") }
+        }.onSuccess { status = tr(context, "PDF схемы сохранён", "PDF схеми збережено", "Pattern PDF saved") }
+            .onFailure { status = tr(context, "Не удалось сохранить PDF схемы", "Не вдалося зберегти PDF схеми", "Could not save pattern PDF") }
     }
 
     val materialsPdfLauncher = rememberLauncherForActivityResult(
@@ -269,9 +271,10 @@ private fun DiamondApp() {
     ) { uri ->
         val p = project ?: return@rememberLauncherForActivityResult
         if (uri != null) runCatching {
+            check(isPro) { "Pro required" }
             context.contentResolver.openOutputStream(uri)?.use { output ->
                 writePatternPng(output, p)
-            }
+            } ?: error("Output stream unavailable")
         }.onSuccess { status = tr(context, "PNG сохранён", "PNG збережено", "PNG saved") }
             .onFailure { status = tr(context, "Не удалось сохранить PNG", "Не вдалося зберегти PNG", "Could not save PNG") }
     }
@@ -281,6 +284,7 @@ private fun DiamondApp() {
     ) { uri ->
         val p = project ?: return@rememberLauncherForActivityResult
         if (uri != null) runCatching {
+            check(isPro) { "Pro required" }
             context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use {
                 it.write(ProjectCodec.encode(p.copy(updatedAt = System.currentTimeMillis())))
             } ?: error("Output stream unavailable")
@@ -614,7 +618,7 @@ private fun DiamondApp() {
                 actions = {
                     TextButton(onClick = { showProDialog = true }) { Text(if (isPro) "PRO ✓" else "PRO", maxLines = 1) }
                     TextButton(onClick = { showLanguageDialog = true }) { Text("🌐", maxLines = 1) }
-                    TextButton(onClick = { showAboutDialog = true }) { Text(tr(context, "О приложении", "Про застосунок", "About"), maxLines = 1) }
+                    TextButton(onClick = { showAboutDialog = true }) { Text("ⓘ", maxLines = 1) }
                 }
             )
         }
@@ -923,7 +927,7 @@ private fun DiamondWorkScreen(
                     OutlinedButton(onClick = onEditSettings, modifier = Modifier.weight(1f)) { Text(tr(context, "Изменить настройки", "Змінити налаштування", "Edit settings"), maxLines = 1) }
                 }
                 OutlinedButton(onClick = { showMaterials = !showMaterials }, modifier = Modifier.weight(1f)) {
-                    Text(if (showMaterials) tr(context, "Скрыть материалы", "Сховати матеріали", "Hide materials") else tr(context, "Материалы", "Матеріали", "Materials"), maxLines = 1)
+                    Text(if (showMaterials) tr(context, "← К схеме", "← До схеми", "← Pattern") else tr(context, "Материалы", "Матеріали", "Materials"), maxLines = 1)
                 }
             }
         }
@@ -935,17 +939,23 @@ private fun DiamondWorkScreen(
             }
         }
 
-        Box(Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
-            if (showOriginal && sourceImage != null) {
-                OriginalImagePreview(sourceImage, Modifier.fillMaxSize())
-            } else {
-                DiamondGrid(project.grid, externalScale = zoomCommand, resetKey = resetKey, modifier = Modifier.fillMaxSize(), onCell = onToggle)
+        if (!showMaterials) {
+            Box(Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
+                if (showOriginal && sourceImage != null) {
+                    OriginalImagePreview(sourceImage, Modifier.fillMaxSize())
+                } else {
+                    DiamondGrid(project.grid, externalScale = zoomCommand, resetKey = resetKey, modifier = Modifier.fillMaxSize(), onCell = onToggle)
+                }
             }
         }
 
         if (showMaterials) {
-            Surface(tonalElevation = 2.dp, modifier = Modifier.fillMaxWidth().heightIn(max = if (compact) 220.dp else 280.dp)) {
-                Column(Modifier.padding(8.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Surface(tonalElevation = 2.dp, modifier = Modifier.fillMaxWidth().weight(1f)) {
+                Column(Modifier.fillMaxSize().padding(8.dp)) {
+                    Button(onClick = { showMaterials = false }, modifier = Modifier.fillMaxWidth()) {
+                        Text(tr(context, "← Вернуться к схеме", "← Повернутися до схеми", "← Back to pattern"))
+                    }
+                    Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(tr(context, "Расходники", "Матеріали", "Supplies"), style = MaterialTheme.typography.titleMedium)
                     SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                         DrillShape.entries.forEachIndexed { index, shape ->
@@ -985,19 +995,20 @@ private fun DiamondWorkScreen(
                             }
                         }
                     }
+                    }
                 }
             }
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                OutlinedButton(onClick = onExportProject, modifier = Modifier.weight(1f)) { Text(if (isPro) tr(context, "Проект", "Проєкт", "Project") else tr(context, "Проект • PRO", "Проєкт • PRO", "Project • PRO"), maxLines = 1) }
-                OutlinedButton(onClick = onPng, modifier = Modifier.weight(1f)) { Text(if (isPro) "PNG" else "PNG • PRO", maxLines = 1) }
-                OutlinedButton(onClick = onPdf, modifier = Modifier.weight(1f)) { Text(if (isPro) tr(context, "Схема PDF", "Схема PDF", "Pattern PDF") else "PDF • PRO", maxLines = 1) }
+                OutlinedButton(onClick = onPdf, modifier = Modifier.weight(1f)) { Text(tr(context, "Схема PDF", "Схема PDF", "Pattern PDF"), maxLines = 1) }
+                OutlinedButton(onClick = onMaterialsPdf, modifier = Modifier.weight(1f)) { Text(tr(context, "Материалы PDF", "Матеріали PDF", "Materials PDF"), maxLines = 1) }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                OutlinedButton(onClick = onExportProject, modifier = Modifier.weight(1f)) { Text(if (isPro) tr(context, "Проект", "Проєкт", "Project") else tr(context, "Проект • PRO", "Проєкт • PRO", "Project • PRO"), maxLines = 1) }
+                OutlinedButton(onClick = onPng, modifier = Modifier.weight(1f)) { Text(if (isPro) "PNG" else "PNG • PRO", maxLines = 1) }
                 OutlinedButton(onClick = onCsv, modifier = Modifier.weight(1f)) { Text(if (isPro) "CSV" else "CSV • PRO", maxLines = 1) }
-                OutlinedButton(onClick = onMaterialsPdf, modifier = Modifier.weight(2f)) { Text(if (isPro) tr(context, "Материалы PDF", "Матеріали PDF", "Materials PDF") else tr(context, "Материалы PDF • PRO", "Матеріали PDF • PRO", "Materials PDF • PRO"), maxLines = 1) }
             }
             Button(onClick = onShoppingList, modifier = Modifier.fillMaxWidth()) { Text(tr(context, "Список покупок", "Список покупок", "Shopping list"), maxLines = 1) }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
