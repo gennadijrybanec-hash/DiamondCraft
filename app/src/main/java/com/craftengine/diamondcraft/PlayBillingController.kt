@@ -28,6 +28,10 @@ class PlayBillingController(context: Context) : PurchasesUpdatedListener {
     var isPro by mutableStateOf(false)
         private set
 
+    // User-visible, non-sensitive entitlement trace; never expose tokens or order IDs.
+    var purchaseDiagnostic by mutableStateOf("Покупка ещё не проверена")
+        private set
+
     var isReady by mutableStateOf(false)
         private set
 
@@ -176,6 +180,7 @@ class PlayBillingController(context: Context) : PurchasesUpdatedListener {
             connect()
             return
         }
+        purchaseDiagnostic = "Запрос покупок Google Play…"
         status = if (productDetails == null) "Проверяем покупки и товар…" else status
         val params = QueryPurchasesParams.newBuilder()
             .setProductType(BillingClient.ProductType.INAPP)
@@ -185,6 +190,7 @@ class PlayBillingController(context: Context) : PurchasesUpdatedListener {
                 processPurchases(purchases)
                 if (productDetails == null) queryProduct()
             } else {
+                purchaseDiagnostic = "Ошибка запроса покупок: код ${result.responseCode}"
                 status = billingError("Не удалось восстановить покупки", result)
             }
         }
@@ -206,6 +212,11 @@ class PlayBillingController(context: Context) : PurchasesUpdatedListener {
         }
 
         isPro = proPurchase != null
+        purchaseDiagnostic = if (proPurchase != null) {
+            "Google Play вернул PURCHASED для $PRO_PRODUCT_ID; покупка подтверждена на устройстве"
+        } else {
+            "Google Play не вернул PURCHASED для $PRO_PRODUCT_ID; бесплатный режим"
+        }
         if (proPurchase == null) {
             if (productDetails != null) {
                 val offer = productDetails?.oneTimePurchaseOfferDetailsList?.firstOrNull()

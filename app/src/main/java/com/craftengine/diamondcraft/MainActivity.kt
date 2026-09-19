@@ -462,10 +462,9 @@ private fun DiamondApp() {
                     Text(tr(context, "• импорт и экспорт проектов .diamondcraft", "• імпорт і експорт проєктів .diamondcraft", "• .diamondcraft project import and export"))
                     Text(tr(context, "• расширенные профили обработки", "• розширені профілі обробки", "• advanced processing profiles"))
                     Text(tr(context, "• расчёт материалов и поиск в магазинах", "• розрахунок матеріалів і пошук у магазинах", "• material calculation and store search"))
-                    if (!isPro) {
-                        HorizontalDivider()
-                        Text(billing.status ?: tr(context, "Google Play Billing недоступен", "Google Play Billing недоступний", "Google Play Billing unavailable"), style = MaterialTheme.typography.bodySmall)
-                    }
+                    HorizontalDivider()
+                    Text(billing.status, style = MaterialTheme.typography.bodySmall)
+                    Text(billing.purchaseDiagnostic, style = MaterialTheme.typography.bodySmall)
                 }
             },
             confirmButton = {
@@ -483,9 +482,7 @@ private fun DiamondApp() {
                 }
             },
             dismissButton = {
-                if (!isPro) {
-                    TextButton(onClick = { billing.refresh() }) { Text(tr(context, "Восстановить покупку", "Відновити покупку", "Restore purchase")) }
-                }
+                TextButton(onClick = { billing.refresh() }) { Text(tr(context, "Проверить покупку", "Перевірити покупку", "Check purchase")) }
             }
         )
     }
@@ -614,11 +611,11 @@ private fun DiamondApp() {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("DiamondCraft", color = MaterialTheme.colorScheme.primary, maxLines = 1) },
+                title = { Text("DiamondCraft", color = MaterialTheme.colorScheme.primary, maxLines = 1, fontSize = 17.sp) },
                 actions = {
                     TextButton(onClick = { showProDialog = true }) { Text(if (isPro) "PRO ✓" else "PRO", maxLines = 1) }
-                    TextButton(onClick = { showLanguageDialog = true }) { Text("🌐", maxLines = 1) }
-                    TextButton(onClick = { showAboutDialog = true }) { Text("ⓘ", maxLines = 1) }
+                    IconButton(onClick = { showLanguageDialog = true }) { Text("🌐") }
+                    IconButton(onClick = { showAboutDialog = true }) { Text("ⓘ") }
                 }
             )
         }
@@ -898,64 +895,20 @@ private fun DiamondWorkScreen(
     var zoomCommand by remember(project.id) { mutableFloatStateOf(1f) }
     var resetKey by remember(project.id) { mutableIntStateOf(0) }
 
-    Column(
-        modifier.padding(horizontal = pagePadding, vertical = if (compact) 6.dp else 8.dp),
-        verticalArrangement = Arrangement.spacedBy(if (compact) 5.dp else 7.dp)
-    ) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Column(Modifier.weight(1f)) {
-                Text(project.name, style = MaterialTheme.typography.titleMedium, maxLines = 1)
-                Text(tr(context, "${project.grid.width} × ${project.grid.height} • ${project.grid.palette.size} цветов", "${project.grid.width} × ${project.grid.height} • ${project.grid.palette.size} кольорів", "${project.grid.width} × ${project.grid.height} • ${project.grid.palette.size} colors"), style = MaterialTheme.typography.bodySmall)
+    // Materials is a separate full-height view: never share vertical space with the
+    // pattern toolbar and export controls on narrow/short screens.
+    if (showMaterials) {
+        Column(
+            modifier.fillMaxSize().padding(horizontal = pagePadding, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            OutlinedButton(onClick = { showMaterials = false }, modifier = Modifier.fillMaxWidth()) {
+                Text(tr(context, "← К схеме", "← До схеми", "← Back to pattern"))
             }
-            Text("${stats.completedDrills}/${stats.totalDrills}", style = MaterialTheme.typography.bodySmall)
-        }
-        LinearProgressIndicator(progress = { (project.grid.progressPercentExact() / 100.0).toFloat().coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
-
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Button(onClick = onSave, modifier = Modifier.weight(2f)) { Text(tr(context, "Сохранить", "Зберегти", "Save"), maxLines = 1) }
-                OutlinedButton(onClick = onUndo, enabled = canUndo, modifier = Modifier.weight(1f)) { Text("↶") }
-                OutlinedButton(onClick = onRedo, enabled = canRedo, modifier = Modifier.weight(1f)) { Text("↷") }
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                OutlinedButton(onClick = { zoomCommand = (zoomCommand / 1.6f).coerceAtLeast(1f) }, modifier = Modifier.weight(1f)) { Text("−") }
-                OutlinedButton(onClick = { zoomCommand = 1f; resetKey++ }, modifier = Modifier.weight(2f)) { Text(tr(context, "По размеру", "За розміром", "Fit"), maxLines = 1) }
-                OutlinedButton(onClick = { zoomCommand = (zoomCommand * 1.6f).coerceAtMost(12f) }, modifier = Modifier.weight(1f)) { Text("+") }
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (sourceImage != null) {
-                    OutlinedButton(onClick = onEditSettings, modifier = Modifier.weight(1f)) { Text(tr(context, "Изменить настройки", "Змінити налаштування", "Edit settings"), maxLines = 1) }
-                }
-                OutlinedButton(onClick = { showMaterials = !showMaterials }, modifier = Modifier.weight(1f)) {
-                    Text(if (showMaterials) tr(context, "← К схеме", "← До схеми", "← Pattern") else tr(context, "Материалы", "Матеріали", "Materials"), maxLines = 1)
-                }
-            }
-        }
-
-        if (sourceImage != null) {
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                SegmentedButton(selected = !showOriginal, onClick = { onShowOriginal(false) }, shape = SegmentedButtonDefaults.itemShape(0, 2)) { Text(tr(context, "Схема", "Схема", "Pattern"), maxLines = 1) }
-                SegmentedButton(selected = showOriginal, onClick = { onShowOriginal(true) }, shape = SegmentedButtonDefaults.itemShape(1, 2)) { Text(tr(context, "Оригинал", "Оригінал", "Original"), maxLines = 1) }
-            }
-        }
-
-        if (!showMaterials) {
-            Box(Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
-                if (showOriginal && sourceImage != null) {
-                    OriginalImagePreview(sourceImage, Modifier.fillMaxSize())
-                } else {
-                    DiamondGrid(project.grid, externalScale = zoomCommand, resetKey = resetKey, modifier = Modifier.fillMaxSize(), onCell = onToggle)
-                }
-            }
-        }
-
-        if (showMaterials) {
-            Surface(tonalElevation = 2.dp, modifier = Modifier.fillMaxWidth().weight(1f)) {
-                Column(Modifier.fillMaxSize().padding(8.dp)) {
-                    Button(onClick = { showMaterials = false }, modifier = Modifier.fillMaxWidth()) {
-                        Text(tr(context, "← Вернуться к схеме", "← Повернутися до схеми", "← Back to pattern"))
-                    }
-                    Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(
+                Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
                     Text(tr(context, "Расходники", "Матеріали", "Supplies"), style = MaterialTheme.typography.titleMedium)
                     SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                         DrillShape.entries.forEachIndexed { index, shape ->
@@ -995,7 +948,58 @@ private fun DiamondWorkScreen(
                             }
                         }
                     }
-                    }
+            }
+        }
+        return
+    }
+
+    Column(
+        modifier.padding(horizontal = pagePadding, vertical = if (compact) 6.dp else 8.dp),
+        verticalArrangement = Arrangement.spacedBy(if (compact) 5.dp else 7.dp)
+    ) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Column(Modifier.weight(1f)) {
+                Text(project.name, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                Text(tr(context, "${project.grid.width} × ${project.grid.height} • ${project.grid.palette.size} цветов", "${project.grid.width} × ${project.grid.height} • ${project.grid.palette.size} кольорів", "${project.grid.width} × ${project.grid.height} • ${project.grid.palette.size} colors"), style = MaterialTheme.typography.bodySmall)
+            }
+            Text("${stats.completedDrills}/${stats.totalDrills}", style = MaterialTheme.typography.bodySmall)
+        }
+        LinearProgressIndicator(progress = { (project.grid.progressPercentExact() / 100.0).toFloat().coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
+
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Button(onClick = onSave, modifier = Modifier.weight(2f)) { Text(tr(context, "Сохранить", "Зберегти", "Save"), maxLines = 1) }
+                OutlinedButton(onClick = onUndo, enabled = canUndo, modifier = Modifier.weight(1f)) { Text("↶") }
+                OutlinedButton(onClick = onRedo, enabled = canRedo, modifier = Modifier.weight(1f)) { Text("↷") }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                OutlinedButton(onClick = { zoomCommand = (zoomCommand / 1.6f).coerceAtLeast(1f) }, modifier = Modifier.weight(1f)) { Text("−") }
+                OutlinedButton(onClick = { zoomCommand = 1f; resetKey++ }, modifier = Modifier.weight(2f)) { Text(tr(context, "По размеру", "За розміром", "Fit"), maxLines = 1) }
+                OutlinedButton(onClick = { zoomCommand = (zoomCommand * 1.6f).coerceAtMost(12f) }, modifier = Modifier.weight(1f)) { Text("+") }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (sourceImage != null) {
+                    OutlinedButton(onClick = onEditSettings, modifier = Modifier.weight(1f)) { Text(tr(context, "Изменить настройки", "Змінити налаштування", "Edit settings"), maxLines = 1) }
+                }
+                OutlinedButton(onClick = { showMaterials = true }, modifier = Modifier.weight(1f)) {
+                    Text(tr(context, "Материалы", "Матеріали", "Materials"), maxLines = 1)
+                }
+            }
+        }
+
+        if (sourceImage != null) {
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                SegmentedButton(selected = !showOriginal, onClick = { onShowOriginal(false) }, shape = SegmentedButtonDefaults.itemShape(0, 2)) { Text(tr(context, "Схема", "Схема", "Pattern"), maxLines = 1) }
+                SegmentedButton(selected = showOriginal, onClick = { onShowOriginal(true) }, shape = SegmentedButtonDefaults.itemShape(1, 2)) { Text(tr(context, "Оригинал", "Оригінал", "Original"), maxLines = 1) }
+            }
+        }
+
+        if (!showMaterials) {
+            Box(Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
+                if (showOriginal && sourceImage != null) {
+                    OriginalImagePreview(sourceImage, Modifier.fillMaxSize())
+                } else {
+                    DiamondGrid(project.grid, externalScale = zoomCommand, resetKey = resetKey, modifier = Modifier.fillMaxSize(), onCell = onToggle)
                 }
             }
         }
