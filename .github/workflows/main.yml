@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - fix/diamondcraft-play-compliance-v206-20261103
 
 jobs:
   build:
@@ -26,8 +27,14 @@ jobs:
         with:
           gradle-version: '8.13'
 
-      - name: Build Debug APK
-        run: gradle assembleDebug
+      - name: Verify Fragment resolution
+        shell: bash
+        run: |
+          gradle :app:dependencyInsight --dependency androidx.fragment:fragment --configuration releaseRuntimeClasspath | tee fragment-dependency.txt
+          grep -F 'androidx.fragment:fragment:1.9.1' fragment-dependency.txt
+
+      - name: Compile and run available unit tests
+        run: gradle :core:test :app:testDebugUnitTest
 
       - name: Prepare Google Play upload key
         shell: bash
@@ -48,23 +55,27 @@ jobs:
             -storepass "$DIAMONDCRAFT_KEYSTORE_PASSWORD" \
             -alias "$DIAMONDCRAFT_KEY_ALIAS"
 
-      - name: Build signed Google Play AAB
+      - name: Build R8-optimized signed release APK and AAB
         env:
           DIAMONDCRAFT_KEYSTORE_PATH: ${{ runner.temp }}/diamondcraft-upload.jks
           DIAMONDCRAFT_KEYSTORE_PASSWORD: ${{ secrets.DIAMONDCRAFT_KEYSTORE_PASSWORD }}
           DIAMONDCRAFT_KEY_ALIAS: ${{ secrets.DIAMONDCRAFT_KEY_ALIAS }}
           DIAMONDCRAFT_KEY_PASSWORD: ${{ secrets.DIAMONDCRAFT_KEY_PASSWORD }}
-        run: gradle bundleRelease
+        shell: bash
+        run: |
+          gradle :app:assembleRelease :app:bundleRelease
+          test -s app/build/outputs/mapping/release/mapping.txt
 
-      - name: Collect APK and AAB
+      - name: Collect release APK, AAB and R8 mapping
         shell: bash
         run: |
           mkdir -p release-files
-          cp app/build/outputs/apk/debug/*.apk release-files/DiamondCraft-RC14-debug.apk
-          cp app/build/outputs/bundle/release/*.aab release-files/DiamondCraft-1.0-RC14-google-play.aab
+          cp app/build/outputs/apk/release/*.apk release-files/DiamondCraft-v206-release.apk
+          cp app/build/outputs/bundle/release/*.aab release-files/DiamondCraft-v206-google-play.aab
+          cp app/build/outputs/mapping/release/mapping.txt release-files/DiamondCraft-v206-mapping.txt
 
-      - name: Upload APK and signed AAB
+      - name: Upload signed APK, AAB and R8 mapping
         uses: actions/upload-artifact@v4
         with:
-          name: DiamondCraft-RC14-APK-and-GooglePlay-AAB
+          name: DiamondCraft-v206-GooglePlay-AAB-and-APK
           path: release-files/*
