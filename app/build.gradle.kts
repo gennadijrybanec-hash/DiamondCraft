@@ -12,8 +12,8 @@ android {
         applicationId = "com.craftengine.diamondcraft"
         minSdk = 26
         targetSdk = 36
-        versionCode = 205
-        versionName = "1.0.7"
+        versionCode = 206
+        versionName = "1.0.8"
     }
 
     signingConfigs {
@@ -40,7 +40,9 @@ android {
             signingConfig = signingConfigs.getByName("dev")
         }
         getByName("release") {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
             if (!System.getenv("DIAMONDCRAFT_KEYSTORE_PATH").isNullOrBlank()) {
                 signingConfig = signingConfigs.getByName("releaseUpload")
             }
@@ -62,6 +64,7 @@ android {
 dependencies {
     implementation(project(":core"))
     implementation("androidx.activity:activity-compose:1.10.1")
+    implementation("androidx.fragment:fragment:1.9.1")
     implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.compose.material3:material3:1.3.2")
     implementation("androidx.compose.ui:ui:1.7.8")
